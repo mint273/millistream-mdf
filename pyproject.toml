@@ -1,0 +1,14 @@
+[project]
+name = "millistream-mdf"
+version = "0.1.0"
+description = "A high-level, intuitive Python wrapper for the libmdf C SDK, providing easy access to Millistream Data Feed servers for real-time financial data streaming."
+authors = [
+    { name = "Gustav Frison", email = "gustav.frison@millistream.com" }
+]
+license = { file = "LICENSE" }
+keywords = ["millistream", "mdf", "data feed", "financial data", "real-time data"]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "rich>=14.2.0",
+]
