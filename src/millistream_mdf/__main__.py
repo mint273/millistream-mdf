@@ -5,8 +5,6 @@ import sys
 from rich.console import Console
 from rich.panel import Panel
 
-from millistream_mdf import __version__
-
 console = Console()
 
 
@@ -105,22 +103,13 @@ def install_deps() -> None:
     elif sys.platform == 'win32':
         install_windows()
 
-def print_version() -> None:
-    """Print the version of the package"""
-    print(f'Version: {__version__}')
-
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description='Millistream MDF')
     parser.add_argument('--install-deps', action='store_true', help='Install dependencies')
-    parser.add_argument('--version', action='store_true', help='Show version')
     args = parser.parse_args()
 
     if args.install_deps:
         install_deps()
-    elif args.version:
-        print_version()
 
 
 
