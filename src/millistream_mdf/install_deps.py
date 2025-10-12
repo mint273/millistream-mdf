@@ -5,6 +5,7 @@ This module can be run independently as a console script.
 Usage: millistream-install-deps
 """
 
+import os
 import subprocess
 import sys
 
@@ -14,6 +15,11 @@ from rich.panel import Panel
 console = Console()
 
 
+def _needs_sudo() -> bool:
+    """Check if we need to use sudo (not running as root)."""
+    return os.geteuid() != 0
+
+
 def install_linux() -> None:
     """Install libmdf for Linux"""
     console.print(Panel(
@@ -21,11 +27,15 @@ def install_linux() -> None:
         f"This will automatically install the necessary dependency 'libmdf' using apt package manager."
     ))
     
+    # Determine if we need sudo
+    use_sudo = _needs_sudo()
+    sudo_prefix = ["sudo"] if use_sudo else []
+    
     try:
         # Step 1: Update package list and install prerequisites
         console.print("[bold]Step 1:[/bold] Updating package list and installing prerequisites...")
-        subprocess.run(["apt", "update"], check=True)
-        subprocess.run(["apt", "install", "-y", "lsb-release", "wget", "gpg"], check=True)
+        subprocess.run([*sudo_prefix, "apt", "update"], check=True)
+        subprocess.run([*sudo_prefix, "apt", "install", "-y", "lsb-release", "wget", "gpg"], check=True)
         
         # Step 2: Add Millistream repository
         console.print("[bold]Step 2:[/bold] Adding Millistream repository...")
@@ -36,20 +46,19 @@ def install_linux() -> None:
         
         # Download and add the repository
         repo_url = f"https://packages.millistream.com/apt/sources.list.d/{codename}.list"
-        subprocess.run(["wget", repo_url, "-O", "/etc/apt/sources.list.d/millistream.list"], check=True)
+        subprocess.run([*sudo_prefix, "wget", repo_url, "-O", "/etc/apt/sources.list.d/millistream.list"], check=True)
         
         # Add the GPG key
         console.print("[bold]Step 3:[/bold] Adding GPG key...")
-        subprocess.run(
-            'wget -O- "https://packages.millistream.com/D2FCCE35.gpg" | gpg --dearmor | tee /usr/share/keyrings/millistream-archive-keyring.gpg > /dev/null',
-            shell=True,
-            check=True
-        )
+        gpg_cmd = 'wget -O- "https://packages.millistream.com/D2FCCE35.gpg" | gpg --dearmor | tee /usr/share/keyrings/millistream-archive-keyring.gpg > /dev/null'
+        if use_sudo:
+            gpg_cmd = f'sudo sh -c \'{gpg_cmd}\''
+        subprocess.run(gpg_cmd, shell=True, check=True)
         
         # Step 4: Install libmdf
         console.print("[bold]Step 4:[/bold] Installing libmdf...")
-        subprocess.run(["apt", "update"], check=True)
-        subprocess.run(["apt", "install", "-y", "libmdf"], check=True)
+        subprocess.run([*sudo_prefix, "apt", "update"], check=True)
+        subprocess.run([*sudo_prefix, "apt", "install", "-y", "libmdf"], check=True)
         
         console.print(Panel(
             f"[bold green]✅ Installation completed successfully![/bold green]\n\n"
