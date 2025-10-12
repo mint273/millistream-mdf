@@ -33,7 +33,7 @@ from ._constants import (
     RequestType
 )
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 __author__ = "Gustav Frison"
 __email__ = "gustav.frison@millistream.com"
 

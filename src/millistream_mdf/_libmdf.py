@@ -114,27 +114,12 @@ def _find_libmdf() -> Generator[str, None, None]:
             '/usr/lib64',
         ]
         
-        def parse_version(path: str) -> tuple[int, ...]:
-            """Extract version numbers from library path for sorting."""
-            basename = os.path.basename(path)
-            # Remove 'libmdf.so' prefix to get version part
-            if basename == 'libmdf.so':
-                return ()  # No version
-            version_str = basename.replace('libmdf.so.', '')
-            try:
-                # Parse version numbers (e.g., "0.13.0" -> (0, 13, 0))
-                return tuple(int(x) for x in version_str.split('.'))
-            except (ValueError, AttributeError):
-                return ()
-        
         # Dynamically search for libmdf.so* in each directory
         for lib_dir in lib_dirs:
             if os.path.isdir(lib_dir):
                 pattern = os.path.join(lib_dir, 'libmdf.so*')
                 matches = glob.glob(pattern)
                 if matches:
-                    # Sort by version number (highest version first)
-                    matches.sort(key=lambda x: parse_version(x), reverse=True)
                     locations.extend(matches)
                     
     elif sys.platform == 'win32':
@@ -170,15 +155,17 @@ def _load_libmdf(max_attempts: int = 3) -> ctypes.CDLL:
         finally:
             sys.exit(1)
     
-    for attempts, lib_path in enumerate(_find_libmdf()):
-        print(f"Attempting to load libmdf from '{lib_path}'")
+    attempts = 0
+    for lib_path in _find_libmdf():
         try:
             lib = ctypes.CDLL(lib_path)
             return lib
 
         except OSError as e:
-            if attempts > max_attempts:
+            if attempts >= max_attempts:
                 raise ImportError(f"Failed to load libmdf from '{lib_path}': {e}")
+
+        attempts += 1    
 
     raise ImportError(
             "Could not find libmdf shared library. "
