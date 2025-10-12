@@ -1,6 +1,6 @@
 [project]
 name = "millistream-mdf"
-version = "0.1.1"
+version = "0.1.2"
 description = "A high-level Python wrapper for the libmdf C SDK, providing access to the Millistream Data Feed (MDF) for real-time financial data streaming."
 authors = [
     { name = "Gustav Frison", email = "gustav.frison@millistream.com" }
@@ -13,6 +13,9 @@ dependencies = [
     "rich>=14.2.0",
 ]
 
+[project.scripts]
+millistream-install-deps = "millistream_mdf.install_deps:main"
+
 [project.urls]
 Homepage = "https://github.com/mint273/millistream-mdf"
 Repository = "https://github.com/mint273/millistream-mdf"
@@ -20,3 +23,7 @@ Documentation = "https://packages.millistream.com/documents/"
 Issues = "https://github.com/mint273/millistream-mdf/issues"
 "Bug Reports" = "https://github.com/mint273/millistream-mdf/issues"
 "Source Code" = "https://github.com/mint273/millistream-mdf"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
