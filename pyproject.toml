@@ -1,6 +1,6 @@
 [project]
 name = "millistream-mdf"
-version = "0.1.5"
+version = "0.1.6"
 description = "A high-level Python wrapper for the libmdf C SDK, providing access to the Millistream Data Feed (MDF) for real-time financial data streaming."
 authors = [
     { name = "Gustav Frison", email = "gustav.frison@millistream.com" }
