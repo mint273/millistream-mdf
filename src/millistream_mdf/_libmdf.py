@@ -5,9 +5,10 @@ This module handles library loading and provides raw C API access with improved 
 
 import ctypes
 import ctypes.util
+import glob
 import os
 import sys
-from typing import Optional, Union, Tuple, Literal, overload
+from typing import Optional, Union, Tuple, Literal, overload, Generator
 
 # C type definitions
 c_int = ctypes.c_int
@@ -85,13 +86,13 @@ class MDF_CONN_STATUS:
     RCV_HB_RES = 7
 
 
-def _find_libmdf() -> Optional[str]:
+def _find_libmdf() -> Generator[str, None, None]:
     """Find the libmdf shared library."""
     # Check environment variable first
     if 'LIBMDF_PATH' in os.environ:
         path = os.environ['LIBMDF_PATH']
         if os.path.exists(path):
-            return path
+            yield path
     
     # Check common locations
     locations: list[str] = []
@@ -103,11 +104,39 @@ def _find_libmdf() -> Optional[str]:
             '/usr/lib/libmdf.dylib',
         ])
     elif sys.platform.startswith('linux'):
-        locations.extend([
-            '/usr/lib/libmdf.so',
-            '/usr/local/lib/libmdf.so',
-            '/usr/lib/x86_64-linux-gnu/libmdf.so',
-        ])
+        # Common library directories on Linux
+        lib_dirs = [
+            '/usr/lib',
+            '/usr/local/lib',
+            '/usr/lib/x86_64-linux-gnu',
+            '/usr/lib/aarch64-linux-gnu',
+            '/usr/lib/i386-linux-gnu',
+            '/usr/lib64',
+        ]
+        
+        def parse_version(path: str) -> tuple[int, ...]:
+            """Extract version numbers from library path for sorting."""
+            basename = os.path.basename(path)
+            # Remove 'libmdf.so' prefix to get version part
+            if basename == 'libmdf.so':
+                return ()  # No version
+            version_str = basename.replace('libmdf.so.', '')
+            try:
+                # Parse version numbers (e.g., "0.13.0" -> (0, 13, 0))
+                return tuple(int(x) for x in version_str.split('.'))
+            except (ValueError, AttributeError):
+                return ()
+        
+        # Dynamically search for libmdf.so* in each directory
+        for lib_dir in lib_dirs:
+            if os.path.isdir(lib_dir):
+                pattern = os.path.join(lib_dir, 'libmdf.so*')
+                matches = glob.glob(pattern)
+                if matches:
+                    # Sort by version number (highest version first)
+                    matches.sort(key=lambda x: parse_version(x), reverse=True)
+                    locations.extend(matches)
+                    
     elif sys.platform == 'win32':
         locations.extend([
             'libmdf.dll',
@@ -125,12 +154,10 @@ def _find_libmdf() -> Optional[str]:
     # Check each location
     for location in locations:
         if os.path.exists(location):
-            return location
-    
-    return
+            yield location
 
 
-def _load_libmdf() -> ctypes.CDLL:
+def _load_libmdf(max_attempts: int = 3) -> ctypes.CDLL:
     """Load the libmdf shared library."""
     # Check if --install-deps flag is present
     if '--install-deps' in sys.argv:
@@ -143,24 +170,24 @@ def _load_libmdf() -> ctypes.CDLL:
         finally:
             sys.exit(1)
     
-    lib_path = _find_libmdf()
-    
-    if not lib_path:
-        raise ImportError(
+    for attempts, lib_path in enumerate(_find_libmdf()):
+        print(f"Attempting to load libmdf from '{lib_path}'")
+        try:
+            lib = ctypes.CDLL(lib_path)
+            return lib
+
+        except OSError as e:
+            if attempts > max_attempts:
+                raise ImportError(f"Failed to load libmdf from '{lib_path}': {e}")
+
+    raise ImportError(
             "Could not find libmdf shared library. "
             "Please ensure libmdf is installed and accessible, "
             "or set 'LIBMDF_PATH' environment variable."
         )
-    
-    try:
-        lib = ctypes.CDLL(lib_path)
-        return lib
-    except OSError as e:
-        raise ImportError(f"Failed to load libmdf from {lib_path}: {e}")
-
 
 # Load the library
-_lib = _load_libmdf()
+_lib = _load_libmdf(max_attempts=3)
 
 # Function signatures
 _lib.mdf_create.restype = mdf_t
