@@ -132,13 +132,24 @@ def _find_libmdf() -> Optional[str]:
 
 def _load_libmdf() -> ctypes.CDLL:
     """Load the libmdf shared library."""
+    # Check if --install-deps flag is present
+    if '--install-deps' in sys.argv:
+        # Run the installer
+        try:
+            from .install_deps import main as install_main
+            print("Running libmdf installer...")
+            install_main()
+        except Exception as e:
+            print(f"Installation failed: {e}")
+            sys.exit(1)
+    
     lib_path = _find_libmdf()
     
     if not lib_path:
         raise ImportError(
             "Could not find libmdf shared library. "
             "Please ensure libmdf is installed and accessible, "
-            "or set LIBMDF_PATH environment variable."
+            "or set 'LIBMDF_PATH' environment variable."
         )
     
     try:

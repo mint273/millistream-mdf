@@ -17,8 +17,8 @@ from ._libmdf import (
     MDF_OPTION, mdf_t
 )
 from ._constants import Field, RequestClass, MessageReference
-from .types import BatchItem
 from ._mappings import SUB_TYPES
+from .types import BatchItem
 
 from .exceptions import (
     MDFError, MDFConnectionError, MDFAuthenticationError, MDFTimeoutError,
