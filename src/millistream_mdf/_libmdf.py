@@ -137,10 +137,10 @@ def _load_libmdf() -> ctypes.CDLL:
         # Run the installer
         try:
             from .install_deps import main as install_main
-            print("Running libmdf installer...")
             install_main()
         except Exception as e:
             print(f"Installation failed: {e}")
+        finally:
             sys.exit(1)
     
     lib_path = _find_libmdf()
