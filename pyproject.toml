@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-millistream-install-deps = "millistream_mdf.install_deps:main"
+millistream-mdf-install = "millistream_mdf.install_deps:main"
 
 [project.urls]
 Homepage = "https://github.com/mint273/millistream-mdf"

@@ -63,7 +63,7 @@ pip install millistream-mdf
 
 **Ubuntu/Debian**
 ```bash
-python -m millistream_mdf --install-deps
+millistream-mdf-install
 ```
 
 For manual installation, refer to the [official documentation](https://packages.millistream.com/Linux/).
