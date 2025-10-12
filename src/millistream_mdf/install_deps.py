@@ -1,4 +1,10 @@
-import argparse
+"""
+Dependency installer for millistream-mdf.
+
+This module can be run independently as a console script.
+Usage: millistream-install-deps
+"""
+
 import subprocess
 import sys
 
@@ -6,8 +12,6 @@ from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
-
-
 
 
 def install_linux() -> None:
@@ -35,14 +39,14 @@ def install_linux() -> None:
         subprocess.run(["wget", repo_url, "-O", "/etc/apt/sources.list.d/millistream.list"], check=True)
         
         # Add the GPG key
-        console.print("[bold]Step 3b:[/bold] Adding GPG key...")
+        console.print("[bold]Step 3:[/bold] Adding GPG key...")
         subprocess.run(
             'wget -O- "https://packages.millistream.com/D2FCCE35.gpg" | gpg --dearmor | tee /usr/share/keyrings/millistream-archive-keyring.gpg > /dev/null',
             shell=True,
             check=True
         )
         
-        # Step 3: Install libmdf
+        # Step 4: Install libmdf
         console.print("[bold]Step 4:[/bold] Installing libmdf...")
         subprocess.run(["apt", "update"], check=True)
         subprocess.run(["apt", "install", "-y", "libmdf"], check=True)
@@ -69,7 +73,6 @@ def install_linux() -> None:
         ))
         sys.exit(1)
 
-    
 
 def install_macos() -> None:
     """Install libmdf for macOS"""
@@ -91,30 +94,23 @@ def install_windows() -> None:
     ))
 
 
-
-
-
-def install_deps() -> None:
+def main() -> None:
     """Install dependencies for the current platform"""
+    console.print("[bold]Millistream MDF Dependency Installer[/bold]\n")
+    
     if sys.platform == 'linux':
         install_linux()
     elif sys.platform == 'darwin':
         install_macos()
     elif sys.platform == 'win32':
         install_windows()
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description='Millistream MDF')
-    parser.add_argument('--install-deps', action='store_true', help='Install dependencies')
-    args = parser.parse_args()
-
-    if args.install_deps:
-        install_deps()
-
-
-
-
+    else:
+        console.print(Panel(
+            f"[bold yellow]⚠️  Unknown platform: {sys.platform}[/bold yellow]\n\n"
+            f"Please visit [blue link=https://packages.millistream.com/]https://packages.millistream.com/[/blue link] for installation instructions."
+        ))
 
 
 if __name__ == "__main__":
     main()
+
