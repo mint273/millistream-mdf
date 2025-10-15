@@ -31,6 +31,7 @@
     - [News Streaming](#news-streaming)
     - [Sending Data](#sending-data)
     - [Manual Connection Control](#manual-connection-control)
+    - [Unsubscribing from Data Streams](#unsubscribing-from-data-streams)
 - [Available Data Types](#available-data-types)
     - [Request Classes](#request-classes)
     - [Subscription Modes](#subscription-modes)
@@ -207,6 +208,34 @@ Subscribe to data streams and yield messages.
 - `timeout`: Timeout in seconds for consume operations
 
 **Returns:** Generator yielding [`Message`](#message-class) objects
+
+##### `unsubscribe(request_classes='*', instruments='*')`
+Unsubscribe from data streams to stop receiving realtime data.
+
+**Parameters:**
+- `request_classes`: List of request classes to unsubscribe from (e.g., `[RequestClass.QUOTE, RequestClass.TRADE]`), or `'*'` for all
+- `instruments`: Instrument references to unsubscribe from. Can be `'*'` for all, or numeric IDs (e.g., `[1146, 1147]`)
+
+**Raises:**
+- [`MDFError`](#exception-types): If not connected or authenticated
+- [`MDFMessageError`](#exception-types): If unsubscription request fails
+
+**Note:** You can unsubscribe from a subset of your active subscriptions - the lists don't have to match previous subscription requests exactly.
+
+**Example:**
+```python
+# Unsubscribe from specific instruments
+client.unsubscribe(
+    request_classes=[RequestClass.QUOTE],
+    instruments=[1146, 1147]
+)
+
+# Unsubscribe from all quotes
+client.unsubscribe(request_classes=[RequestClass.QUOTE], instruments='*')
+
+# Unsubscribe from everything
+client.unsubscribe()
+```
 
 ##### `stream(timeout=1)`
 Stream messages from the server.
@@ -417,7 +446,7 @@ with MDF(
 ### Manual Connection Control
 
 ```python
-from millistream_mdf import MDF, MDFError
+from millistream_mdf import MDF, MDFError, RequestClass
 
 session = MDF(
     url='sandbox.millistream.com',
@@ -442,6 +471,54 @@ except MDFError as e:
     print(f"Error: {e}")
 finally:
     session.disconnect()
+```
+
+### Unsubscribing from Data Streams
+
+```python
+from millistream_mdf import MDF, RequestClass
+import time
+
+with MDF(
+    url='sandbox.millistream.com',
+    port=9100,
+    username='sandbox',
+    password='sandbox'
+) as session:
+    
+    # Subscribe to quotes and trades for specific instruments
+    session.subscribe(
+        request_classes=[RequestClass.QUOTE, RequestClass.TRADE],
+        instruments=[1146, 1147],  # Volvo B, Atlas Copco A
+        subscription_mode='stream',
+        timeout=1
+    )
+    
+    # Stream for 10 seconds
+    start_time = time.time()
+    for message in session.stream(timeout=1):
+        print(f"Received: {message.ref} for instrument {message.instrument}")
+        
+        if time.time() - start_time > 10:
+            break
+    
+    # Unsubscribe from trades only for instrument 1146
+    session.unsubscribe(
+        request_classes=[RequestClass.TRADE],
+        instruments=[1146]
+    )
+    print("Unsubscribed from trades for instrument 1146")
+    
+    # Continue streaming (will only receive quotes and trades for 1147)
+    for message in session.stream(timeout=1):
+        print(f"Received: {message.ref} for instrument {message.instrument}")
+        
+        if time.time() - start_time > 20:
+            break
+    
+    # Unsubscribe from everything
+    session.unsubscribe()
+    print("Unsubscribed from all streams")
 ```
 
 ## Available Data Types
