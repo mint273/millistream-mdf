@@ -1,0 +1,2 @@
+# Exclude docs folder from GitHub releases
+docs/ export-ignore
