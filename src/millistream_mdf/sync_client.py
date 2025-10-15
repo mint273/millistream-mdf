@@ -161,7 +161,8 @@ class MDF:
         request_classes: Sequence[int], 
         instruments: Sequence[int] | Literal['*'] = '*', 
         subscription_mode: Literal['image', 'stream', 'full'] = 'full', 
-        timeout: int = 1
+        timeout: int = 1,
+        unsubscribe_on_exit: bool = False
     ) -> Generator[Message, None, None]:
         """
         Subscribe to data streams and yield messages.
@@ -178,7 +179,7 @@ class MDF:
                 - Sequence of integers: Numeric instrument IDs (e.g., [1146, 1147])
             subscription_mode: Subscription mode ('image', 'stream', or 'full')
             timeout: Timeout in seconds for consume operations
-            
+            unsubscribe_on_exit: Unsubscribe from all streams when the context manager is exited (only relevant if the call is iterated).
         Yields:
             Message objects containing the received data. Each message will have a
             MessageReference type (e.g., MessageReference.QUOTE) corresponding to the
@@ -196,10 +197,48 @@ class MDF:
         
         # Send subscription request
         self._send_subscription_request(request_classes, instruments, subscription_mode)
-        
-        # Stream messages
-        yield from self.stream(timeout)
 
+        # Stream messages
+        yield from self.stream(timeout, unsubscribe_on_exit)
+    
+    def unsubscribe(self, request_classes: Sequence[int] | Literal['*'] = '*', instruments: Sequence[int] | Literal['*'] = '*') -> None:
+        """
+        Unsubscribe from data streams.
+        
+        This sends an UNSUBSCRIBE message (MessageReference.UNSUBSCRIBE) to the server
+        to stop receiving realtime data for the specified request classes and instruments.
+        
+        You can unsubscribe from a subset of your active subscriptions - the lists don't
+        have to match previous subscription requests exactly.
+
+        Args:
+            request_classes: List of RequestClass values to unsubscribe from, or '*' for all.
+                Examples: [RequestClass.QUOTE, RequestClass.TRADE] or '*'
+            instruments: List of instrument references to unsubscribe from, or '*' for all.
+                Examples: [1146, 1147] or '*'
+                
+        Raises:
+            MDFError: If not connected or authenticated
+            MDFMessageError: If unsubscription request fails
+            
+        Example:
+            # Unsubscribe from specific instruments
+            client.unsubscribe(
+                request_classes=[RequestClass.QUOTE],
+                instruments=[1146, 1147]
+            )
+            
+            # Unsubscribe from all quotes
+            client.unsubscribe(request_classes=[RequestClass.QUOTE], instruments='*')
+            
+            # Unsubscribe from everything
+            client.unsubscribe()
+        """
+        if not self._connected or not self._authenticated:
+            raise MDFError("Not connected or authenticated!")
+        
+        self._send_unsubscription_request(request_classes, instruments)
+    
     def send(
         self, 
         mref: int, 
@@ -315,14 +354,14 @@ class MDF:
             
         Example:
             with client.create_message_builder() as builder:
-                builder.add_message(request_class=RequestClass.QUOTE, instrument=12345)
+                builder.add_message(mref=MessageReference.QUOTE, instrument=12345)
                 builder.add_field('bidprice', '100.50')
                 builder.add_field('askprice', '100.55')
                 builder.send(client._handle)
         """
         return MessageBuilder()
     
-    def stream(self, timeout: int = 1) -> Generator[Message, None, None]:
+    def stream(self, timeout: int = 1, unsubscribe_on_exit: bool = False) -> Generator[Message, None, None]:
         """
         Stream messages from the server.
         
@@ -335,48 +374,52 @@ class MDF:
         if not self._connected:
             raise MDFError("Not connected!")
         
-        while True:
-            try:
-                # Consume data from server
-                result = mdf_consume(self._handle, timeout)
-                
-                if result == -1:  # Error
-                    error_code = mdf_get_property(self._handle, MDF_OPTION.ERROR)
-                    raise_for_error(error_code, "Consume operation failed!")
-                
-                if result == 1:  # Messages available
-                    # Process all available messages
-                    while True:
-                        has_message, mref, instrument_id = mdf_get_next_message2(self._handle)
-                        if not has_message:
-                            break
-                        
-                        delay = mdf_get_delay(self._handle)
-                        
-                        # Collect all fields for this message
-                        fields: dict[int, Optional[str]] = {}
-                        while True:
-                            has_field, tag, value = mdf_get_next_field(self._handle)
-                            if not has_field:
-                                break
-                            fields[tag] = value
-                        
-                        yield Message(
-                            ref=mref,
-                            instrument=instrument_id,
-                            fields=fields,
-                            delay=delay
-                        )
-                
-                elif result == 0:  # Timeout
-                    continue
+        try:
+            while True:
+                try:
+                    # Consume data from server
+                    result = mdf_consume(self._handle, timeout)
                     
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                if isinstance(e, MDFError):
-                    raise
-                raise MDFError(f"Streaming error: {e}")
+                    if result == -1:  # Error
+                        error_code = mdf_get_property(self._handle, MDF_OPTION.ERROR)
+                        raise_for_error(error_code, "Consume operation failed!")
+                    
+                    if result == 1:  # Messages available
+                        # Process all available messages
+                        while True:
+                            has_message, mref, instrument_id = mdf_get_next_message2(self._handle)
+                            if not has_message:
+                                break
+                            
+                            delay = mdf_get_delay(self._handle)
+                            
+                            # Collect all fields for this message
+                            fields: dict[int, Optional[str]] = {}
+                            while True:
+                                has_field, tag, value = mdf_get_next_field(self._handle)
+                                if not has_field:
+                                    break
+                                fields[tag] = value
+                            
+                            yield Message(
+                                ref=mref,
+                                instrument=instrument_id,
+                                fields=fields,
+                                delay=delay
+                            )
+                    
+                    elif result == 0:  # Timeout
+                        continue
+                        
+                except KeyboardInterrupt:
+                    break
+                except Exception as e:
+                    if isinstance(e, MDFError):
+                        raise
+                    raise MDFError(f"Streaming error: {e}")
+        finally:
+            if unsubscribe_on_exit:
+                self.unsubscribe()
     
     def _set_connection_options(self) -> None:
         """Set connection options on the MDF handle."""
@@ -466,6 +509,37 @@ class MDF:
             # Send request
             if not mdf_message_send(self._handle, message):
                 raise MDFMessageError("Failed to send subscription request!")
+            
+        finally:
+            mdf_message_destroy(message)
+
+    def _send_unsubscription_request(self, request_classes: Sequence[RequestClass] | Literal['*'], instruments: Sequence[int] | Literal['*']) -> None:
+        """Send unsubscription request message."""
+        message = mdf_message_create()
+        if not message:
+            raise MDFMessageError("Failed to create unsubscription message!")
+        
+        try:
+            # Add unsubscribe message
+            mdf_message_add(message, 0, MessageReference.UNSUBSCRIBE)
+            
+            # Add request classes
+            if request_classes == '*':
+                rc_str = '*'
+            else:
+                rc_str = ' '.join(str(rc) for rc in request_classes)
+            mdf_message_add_list(message, Field.REQUESTCLASS, rc_str)
+            
+            # Add instrument references
+            if instruments == '*':
+                insref_str = '*'
+            else:
+                insref_str = ' '.join(str(ref) for ref in instruments)
+            mdf_message_add_list(message, Field.INSREFLIST, insref_str)
+            
+            # Send unsubscribe request
+            if not mdf_message_send(self._handle, message):
+                raise MDFMessageError("Failed to send unsubscription request!")
             
         finally:
             mdf_message_destroy(message)

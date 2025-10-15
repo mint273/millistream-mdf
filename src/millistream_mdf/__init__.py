@@ -14,7 +14,6 @@ Example:
 
 from .sync_client import MDF
 from .async_client import AsyncMDF
-from .message_builder import MessageBuilder
 from .message import Message
 from .exceptions import (
     MDFError,
@@ -33,10 +32,10 @@ from ._constants import (
     RequestType
 )
 
-__version__ = "0.1.8"
+__version__ = "0.1.9"
 __author__ = "Gustav Frison"
 __email__ = "gustav.frison@millistream.com"
 
 __all__ = [
-    'MDF', 'MDFAsync', 'RequestType', 'RequestClass', 'MessageReference', 'Field', 'BatchItem'
+    'MDF', 'AsyncMDF', 'RequestType', 'RequestClass', 'MessageReference', 'Field', 'BatchItem', 'Message',
 ]
