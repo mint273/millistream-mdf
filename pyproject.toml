@@ -10,10 +10,12 @@ keywords = ["millistream", "mdf", "data feed", "financial data", "real-time data
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "rich>=14.2.0",
+]
+[project.optional-dependencies]
+dev = [
     "docker>=7.1.0",
     "pytest>=8.4.2",
-    "rich>=14.2.0",
-    "websockets>=15.0.1",
 ]
 
 [project.urls]

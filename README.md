@@ -27,14 +27,14 @@
 - [API Reference](#api-reference)
     - [MDF Class](#mdf-class)
     - [Message Class](#message-class)
+- [Available Data Types](#available-data-types)
+    - [Request Classes](#request-classes)
+    - [Subscription Modes](#subscription-modes)
 - [Usage Examples](#usage-examples)
     - [News Streaming](#news-streaming)
     - [Sending Data](#sending-data)
     - [Manual Connection Control](#manual-connection-control)
-    - [Unsubscribing from Data Streams](#unsubscribing-from-data-streams)
-- [Available Data Types](#available-data-types)
-    - [Request Classes](#request-classes)
-    - [Subscription Modes](#subscription-modes)
+    - [Subscribe Usage](#subscribe-usage)
 - [Error Handling](#error-handling)
 - [Documentation](#documentation)
 - [License](#license)
@@ -89,6 +89,8 @@ It is recommended to use the latest [libmdf installer](https://packages.millistr
 
 ## Quick Start
 
+A simple websocket connection to listen for `quote` data for Volvo B:
+
 ```python
 from millistream_mdf import MDF, RequestClass
 
@@ -101,7 +103,7 @@ with MDF(
 ) as session:
     
     for message in session.subscribe(
-        request_classes=[RequestClass.QUOTE],                       # Subscrive to 'quote' data
+        request_classes=[RequestClass.QUOTE],                       # Subscribe to 'quote' data
         instruments=[1146],                                         # Volvo B
         timeout=1
     ):
@@ -111,7 +113,7 @@ with MDF(
     print('---')
 ```
 
-or using the **asyncio** API:
+Or using the **asyncio** API:
 
 ```python
 from millistream_mdf import AsyncMDF, RequestClass
@@ -128,7 +130,7 @@ async def main():
     ) as session:
         
         async for message in session.subscribe(
-            request_classes=[RequestClass.QUOTE],                       # Subscrive to 'quote' data
+            request_classes=[RequestClass.QUOTE],                       # Subscribe to 'quote' data
             instruments=[1146],                                         # Volvo B
             timeout=1
         ):
@@ -140,9 +142,9 @@ async def main():
 asyncio.run(main())
 ```
 
-> **Tip:** You can use `sandbox.millistream.com:9100` for free to test the MDF with username: `sandbox` and password: `sandbox`. The data will be delayed and might not have access to the full offering.
-
 > **Tip:** If you only want to convert the types you can use `parse_fields(remap_keys=False, convert_types=[...])`
+
+> **Tip:** You can use `sandbox.millistream.com` for no cost to test the MDF with username: `sandbox` and password: `sandbox`. The data will be delayed and might not have access to the full offering.
 
 **Example Output:**
 ```
@@ -159,8 +161,8 @@ raw: {19: '3173', 20: '1432', 4: '15:30:02'}
 parsed: {'bidquantity': 3173.0, 'askquantity': 1432.0, 'time': datetime.time(15, 30, 2)}
 ```
 
-> **Note:** Only the differences are broadcasted for efficacy. In the example above a full image is broadcasted at the beginning since [`subscription_mode`](#subcriptions-modes) defaults to `full` (`image` + `stream`).
- 
+> **Note:** Only the differences are broadcasted for efficacy. In the example above a full image is broadcasted at the beginning since [`subscription_mode`](#subcription-modes) defaults to `full` (`image` + `stream`).
+
 
 ## API Reference
 
@@ -209,8 +211,8 @@ Subscribe to data streams and yield messages.
 
 **Parameters:**
 - `request_classes`: List of request classes to subscribe to (e.g., `[RequestClass.QUOTE, RequestClass.TRADE, RequestClass.BASICDATA]`). Can be string names or integer MREF codes
-- `instruments`: Instrument references to subscribe to. Can be `'*'` for all, or numeric IDs (e.g., `[1146, 1147]`)
-- `subscription_mode`: Subscription mode (`'image'`, `'stream'`, or `'full'`). See [`Subscription Modes`](#subcriptions-modes) for more information.
+- `instruments`: Instrument references to subscribe to. Can be `'*'` for all, or numeric IDs (e.g., `[1146, 1279]`)
+- `subscription_mode`: Subscription mode (`'image'`, `'stream'`, or `'full'`). See [`Subscription Modes`](#subcription-modes) for more information.
 - `timeout`: Timeout in seconds for consume operations
 
 **Returns:** Generator yielding [`Message`](#message-class) objects
@@ -220,7 +222,7 @@ Unsubscribe from data streams to stop receiving realtime data.
 
 **Parameters:**
 - `request_classes`: List of request classes to unsubscribe from (e.g., `[RequestClass.QUOTE, RequestClass.TRADE]`), or `'*'` for all
-- `instruments`: Instrument references to unsubscribe from. Can be `'*'` for all, or numeric IDs (e.g., `[1146, 1147]`)
+- `instruments`: Instrument references to unsubscribe from. Can be `'*'` for all, or numeric IDs (e.g., `[1146, 1279]`)
 
 **Raises:**
 - [`MDFError`](#exception-types): If not connected or authenticated
@@ -231,16 +233,16 @@ Unsubscribe from data streams to stop receiving realtime data.
 **Example:**
 ```python
 # Unsubscribe from specific instruments
-client.unsubscribe(
+session.unsubscribe(
     request_classes=[RequestClass.QUOTE],
-    instruments=[1146, 1147]
+    instruments=[1146, 1279]
 )
 
 # Unsubscribe from all quotes
-client.unsubscribe(request_classes=[RequestClass.QUOTE], instruments='*')
+session.unsubscribe(request_classes=[RequestClass.QUOTE], instruments='*')
 
 # Unsubscribe from everything
-client.unsubscribe()
+session.unsubscribe()
 ```
 
 ##### `stream(timeout=1)`
@@ -268,7 +270,7 @@ Send a single message to the server with specified fields.
 
 **Example:**
 ```python
-client.send(
+session.send(
     mref=MessageReference.QUOTE,
     instrument=12345,
     fields={
@@ -290,7 +292,7 @@ Send multiple messages in a single batch for better efficiency.
 
 **Example:**
 ```python
-client.send_batch([
+session.send_batch([
     {
         'mref': MessageReference.QUOTE,
         'instrument': 12345,
@@ -311,11 +313,11 @@ Create a new `MessageBuilder` for advanced message construction.
 
 **Example:**
 ```python
-with client.create_message_builder() as builder:
+with session.create_message_builder() as builder:
     builder.add_message(mref=MessageReference.QUOTE, instrument=12345)
     builder.add_field(Field.BIDPRICE, 100.50)
     builder.add_field(Field.ASKPRICE, 100.55)
-    builder.send(client._handle)
+    builder.send(session._handle)
 ```
 
 ### Message Class
@@ -337,7 +339,7 @@ Represents a message received from the MDF server.
 |-----------------|----------------------------------------|------------------------------------------------------------------------|-----------|--------------------------------------------------|
 | `parsed_fields` | `dict[str \| int, str \| int \| float \| date \| time \| datetime \| list[str]]` | Dictionary of field: value pairs with parsed types |           | `{'bidprice': 100.50, 'askprice': 100.55}`       |
 
-> **Note:** For a list items are always `str`. The type of each item in the list is not guaranteed. For general type casting the type will have to be guessed.
+> **Note:** For a list, items are always `str`. The type of each item in the list is not guaranteed. For general type casting the type will have to be guessed.
 
 #### Methods
 
@@ -360,6 +362,72 @@ Allow dict-like access to fields: `message[Field.BIDPRICE]`
 
 ##### `__contains__(field)`
 Check if field exists: `Field.BIDPRICE in message`
+
+## Available Data Types
+
+### Request Classes
+
+The data classes to subscribe to (`millistream_mdf.RequestClass`):
+
+- `NEWSHEADLINE`: News headlines
+- `NEWSCONTENT`: Full news content
+- `QUOTE`: Market quotes (bid/ask)
+- `TRADE`: Trade executions
+- `ORDER`: Order book data
+- `BASICDATA`: Instrument basic information
+- `PRICEHISTORY`: Historical price data
+- `CORPORATEACTION`: Corporate actions
+- `FUNDAMENTALS`: Financial fundamentals
+- `PERFORMANCE`: Performance metrics
+- `KEYRATIOS`: Key financial ratios
+- `ESTIMATES`: Analyst estimates
+- `GREEKS`: Options Greeks
+- And more...
+
+The request class references are available as constants using `millistream_mdf.RequestClass`: 
+
+```python
+from millistream_mdf import RequestClass
+
+# a few examples
+RequestClass.QUOTE      # = 1 (internal reference number)
+RequestClass.BASICDATA  # = 4 
+RequestClass.CIHISTORY  # = 19
+```
+
+### Message Reference
+
+The possible response message types (`millistream_mdf.MessageReference`):
+
+- `LOGON`: Logon
+- `LOGOFF`: Logoff
+- `LOGONGREETING`: Logon greeting
+- `NEWSHEADLINE`: News headline
+- `QUOTE`: Quote
+- `TRADE`: Trade
+- `BIDLEVELINSERT`: Bid level insert
+- `ASKLEVELINSERT`: Ask level insert
+- `BIDLEVELDELETE`: Bid level delete
+- `ASKLEVELDELETE`: Ask level delete
+- `BIDLEVELUPDATE`: Bid level update
+- `ASKLEVELUPDATE`: Ask level update
+- `INSTRUMENTRESET`: Instrument reset
+- And [more](https://packages.millistream.com/documents/MDF%20Messages%20Reference.pdf)...
+
+The message class references are available as constants using `millistream_mdf.MessageReference`. 
+
+Use the `ref` attribute to check the type of response message.
+A [request class](#request-classes) can return multiple message types.
+For instance `RequestClass.MBO` can return `MessageReferences.ORDERBOOKFLUSH`, `MessageReference.BIDLEVELUPDATE`, `MessageReference.BIDLEVELUPDATE` etc... 
+```python
+for message in session.stream(timeout=1):
+    if message.ref == MessageReference.ORDERBOOKFLUSH:
+        ...
+    elif message.ref == MessageReference.BIDLEVELUPDATE:
+        ...
+    elif message.ref == MessageReference.ASKLEVELUPDATE:
+        ...    
+```
 
 ## Usage Examples
 
@@ -416,14 +484,14 @@ from millistream_mdf import MDF, MessageReference, Field
 
 # Simple message sending
 with MDF(
-    url='server.example.com',
+    url='dnode3.sto5.millistream.com',
     port=9100,
-    username='user',
-    password='pass'
-) as client:
+    username='usr',
+    password='pwd'
+) as session:
     
     # Send a single quote message
-    client.send(
+    session.send(
         mref=MessageReference.QUOTE,
         instrument=12345,
         fields={
@@ -435,7 +503,7 @@ with MDF(
     )
     
     # Send multiple messages in a batch (more efficient)
-    client.send_batch([
+    session.send_batch([
         {
             'mref': MessageReference.QUOTE,
             'instrument': 12345,
@@ -479,7 +547,7 @@ finally:
     session.disconnect()
 ```
 
-### Unsubscribing from Data Streams
+### Subscribe Usage
 
 ```python
 from millistream_mdf import MDF, RequestClass
@@ -495,7 +563,7 @@ with MDF(
     # Subscribe to quotes and trades for specific instruments
     session.subscribe(
         request_classes=[RequestClass.QUOTE, RequestClass.TRADE],
-        instruments=[1146, 1147],  # Volvo B, Atlas Copco A
+        instruments=[1146, 1279],  # Volvo B, Atlas Copco B
         subscription_mode='stream',
         timeout=1
     )
@@ -515,7 +583,7 @@ with MDF(
     )
     print("Unsubscribed from trades for instrument 1146")
     
-    # Continue streaming (will only receive quotes and trades for 1147)
+    # Continue streaming (will only receive quotes and trades for 1279)
     for message in session.stream(timeout=1):
         print(f"Received: {message.ref} for instrument {message.instrument}")
         
@@ -526,45 +594,6 @@ with MDF(
     session.unsubscribe()
     print("Unsubscribed from all streams")
 ```
-
-## Available Data Types
-
-### Request Classes
-
-- `NEWSHEADLINE`: News headlines
-- `NEWSCONTENT`: Full news content
-- `QUOTE`: Market quotes (bid/ask)
-- `TRADE`: Trade executions
-- `ORDER`: Order book data
-- `BASICDATA`: Instrument basic information
-- `PRICEHISTORY`: Historical price data
-- `CORPORATEACTION`: Corporate actions
-- `FUNDAMENTALS`: Financial fundamentals
-- `PERFORMANCE`: Performance metrics
-- `KEYRATIOS`: Key financial ratios
-- `ESTIMATES`: Analyst estimates
-- `MIFID`: MiFID II data
-- `GREEKS`: Options Greeks
-- And more...
-
-### Message Reference
-
-- `MESSAGESREFERENCE`: Message reference
-- `LOGON`: Logon
-- `LOGOFF`: Logoff
-- `LOGONGREETING`: Logon greeting
-- `NEWSHEADLINE`: News headline
-- `QUOTE`: Quote
-- `TRADE`: Trade
-- `BIDLEVELINSERT`: Bid level insert
-- `ASKLEVELINSERT`: Ask level insert
-- `BIDLEVELDELETE`: Bid level delete
-- `ASKLEVELDELETE`: Ask level delete
-- `BIDLEVELUPDATE`: Bid level update
-- `ASKLEVELUPDATE`: Ask level update
-- `INSTRUMENTRESET`: Instrument reset
-- And [more](https://packages.millistream.com/documents/MDF%20Messages%20Reference.pdf)...
-
 
 ### Subscription Modes
 
