@@ -64,7 +64,6 @@ pip install millistream-mdf
 
 **Ubuntu/Debian**
 
-With **uv**:
 ```bash
 uv run python -m millistream_mdf --install-deps
 ```
@@ -73,7 +72,6 @@ Or:
 ```bash
 python -m millistream_mdf --install-deps
 ```
-
 
 For manual installation, refer to the [official documentation](https://packages.millistream.com/Linux/).
 
@@ -329,4 +327,307 @@ Represents a message received from the MDF server.
 | Name            | Type                                   | Description                                                            | Default   | Example                                          |
 |-----------------|----------------------------------------|------------------------------------------------------------------------|-----------|--------------------------------------------------|
 | `ref`           | `int`                                  | What type of message it is (e.g. `MessageReference.NEWSHEADLINE`)      |           | `MessageReference.QUOTE`                         |
-| `instrument`    | `
+| `instrument`    | `int`                                  | Instrument reference ID                                                |           | `12345`                                          |
+| `fields`        | `dict[int, str \| None]`               | Dictionary of field: value pairs (raw values)                          | `{}`      | `{Field.BIDPRICE: "100.50", Field.ASKPRICE: "100.55"}` |
+| `delay`         | `int`                                  | Message delay type                                                     | `0`       | `0`                                              |
+
+#### Properties
+
+| Name            | Type                                   | Description                                                            | Default   | Example                                          |
+|-----------------|----------------------------------------|------------------------------------------------------------------------|-----------|--------------------------------------------------|
+| `parsed_fields` | `dict[str \| int, str \| int \| float \| date \| time \| datetime \| list[str]]` | Dictionary of field: value pairs with parsed types |           | `{'bidprice': 100.50, 'askprice': 100.55}`       |
+
+> **Note:** For a list items are always `str`. The type of each item in the list is not guaranteed. For general type casting the type will have to be guessed.
+
+#### Methods
+
+##### `parse_fields(remap_keys=True, convert_types=['str', 'int', 'float', 'date', 'time', 'datetime', 'list'], on_field_missing='ignore', list_delimiter=' ')`
+Parse and convert field values to their proper types.
+
+**Parameters:**
+- `remap_keys`: If `True`, use lowercase field names as keys; else use field IDs
+- `convert_types`: Which types to convert (`str`, `int`, `float`, `date`, `time`, `datetime`, `list`)
+- `on_field_missing`: How to handle unmapped fields (`'raise'`, `'ignore'`, `'skip'`)
+- `list_delimiter`: Delimiter to split list values on
+
+**Returns:** Dictionary with converted values
+
+##### `get(field, default=None)`
+Get field value by name with optional default.
+
+##### `__getitem__(field)`
+Allow dict-like access to fields: `message[Field.BIDPRICE]`
+
+##### `__contains__(field)`
+Check if field exists: `Field.BIDPRICE in message`
+
+## Usage Examples
+
+### News Streaming
+
+```python
+from millistream_mdf import MDF, RequestClass, MessageReference, Field
+
+with MDF(
+    url='sandbox.millistream.com',
+    port=9100,
+    username='sandbox',
+    password='sandbox'
+) as session:
+    
+    for message in session.subscribe(
+        request_classes=[RequestClass.NEWSHEADLINE, RequestClass.NEWSCONTENT],
+        subscription_mode='stream',
+        instruments='*',
+        timeout=1
+    ):
+        if message.ref == MessageReference.NEWSHEADLINE:
+            print(f"Headline: {message.get(Field.HEADLINE)}")
+            print(f"Date: {message.get(Field.DATE)}")
+
+        elif message.ref == MessageReference.NEWSCONTENT:
+            print(f'Content: {message.get(Field.TEXTBODY, 'N/A')[:100]}...')
+            print('---')
+```
+
+> **Tip:** You can use `'*'` for all available instruments.
+
+> **Note:** [`RequestClass`](#request-classes) and [`MessageReference`](#message-reference) have overlapping names but serve different purposes and have different integer values.
+
+**Example Output:**
+
+```
+Headline: Antibiotics Market Size to Surpass USD 55.26 Billion by 2033, Report by DataM Intelligence
+Date: 2025-10-10
+Content: <?xml version="1.0" encoding="UTF-8"?><NewsItem><NewsEnvelope><TransmissionId>202509221001PR_NEWS_EU...
+---
+Headline: Aventis Energy Confirms Strong Radioactivity at Corvo Uranium Project
+Date: 2025-10-10
+Content: <?xml version="1.0" encoding="UTF-8"?><NewsItem><NewsEnvelope><TransmissionId>A3462546</Transmission...
+---
+```
+
+> **Note:** Headlines and content are sent in different messages so that the headline can be recieved as quick as possible. You can pair them together using the `Field.NEWSID` field.
+
+### Sending Data
+
+```python
+from millistream_mdf import MDF, MessageReference, Field
+
+# Simple message sending
+with MDF(
+    url='server.example.com',
+    port=9100,
+    username='user',
+    password='pass'
+) as client:
+    
+    # Send a single quote message
+    client.send(
+        mref=MessageReference.QUOTE,
+        instrument=12345,
+        fields={
+            Field.BIDPRICE: 100.50,
+            Field.ASKPRICE: 100.55,
+            Field.BIDQUANTITY: 1000,
+            Field.ASKQUANTITY: 500,
+        }
+    )
+    
+    # Send multiple messages in a batch (more efficient)
+    client.send_batch([
+        {
+            'mref': MessageReference.QUOTE,
+            'instrument': 12345,
+            'fields': {Field.BIDPRICE: 100.50, Field.ASKPRICE: 100.55},
+        },
+        {
+            'mref': MessageReference.TRADE,
+            'instrument': 12345,
+            'fields': {Field.TRADEPRICE: 100.52, Field.TRADEQUANTITY: 1000},
+        }
+    ])
+```
+
+### Manual Connection Control
+
+```python
+from millistream_mdf import MDF, MDFError, RequestClass
+
+session = MDF(
+    url='sandbox.millistream.com',
+    port=9100,
+    username='sandbox',
+    password='sandbox'
+)
+
+try:
+    session.connect()
+    print("Connected!")
+    
+    # Subscribe to quote data
+    session.subscribe(request_classes=[RequestClass.QUOTE], instruments='*')
+
+    # Stream subscribed data
+    for message in session.stream(timeout=1):
+        print(message.fields)
+        print("---")
+        
+except MDFError as e:
+    print(f"Error: {e}")
+finally:
+    session.disconnect()
+```
+
+### Unsubscribing from Data Streams
+
+```python
+from millistream_mdf import MDF, RequestClass
+import time
+
+with MDF(
+    url='sandbox.millistream.com',
+    port=9100,
+    username='sandbox',
+    password='sandbox'
+) as session:
+    
+    # Subscribe to quotes and trades for specific instruments
+    session.subscribe(
+        request_classes=[RequestClass.QUOTE, RequestClass.TRADE],
+        instruments=[1146, 1147],  # Volvo B, Atlas Copco A
+        subscription_mode='stream',
+        timeout=1
+    )
+    
+    # Stream for 10 seconds
+    start_time = time.time()
+    for message in session.stream(timeout=1):
+        print(f"Received: {message.ref} for instrument {message.instrument}")
+        
+        if time.time() - start_time > 10:
+            break
+    
+    # Unsubscribe from trades only for instrument 1146
+    session.unsubscribe(
+        request_classes=[RequestClass.TRADE],
+        instruments=[1146]
+    )
+    print("Unsubscribed from trades for instrument 1146")
+    
+    # Continue streaming (will only receive quotes and trades for 1147)
+    for message in session.stream(timeout=1):
+        print(f"Received: {message.ref} for instrument {message.instrument}")
+        
+        if time.time() - start_time > 20:
+            break
+    
+    # Unsubscribe from everything
+    session.unsubscribe()
+    print("Unsubscribed from all streams")
+```
+
+## Available Data Types
+
+### Request Classes
+
+- `NEWSHEADLINE`: News headlines
+- `NEWSCONTENT`: Full news content
+- `QUOTE`: Market quotes (bid/ask)
+- `TRADE`: Trade executions
+- `ORDER`: Order book data
+- `BASICDATA`: Instrument basic information
+- `PRICEHISTORY`: Historical price data
+- `CORPORATEACTION`: Corporate actions
+- `FUNDAMENTALS`: Financial fundamentals
+- `PERFORMANCE`: Performance metrics
+- `KEYRATIOS`: Key financial ratios
+- `ESTIMATES`: Analyst estimates
+- `MIFID`: MiFID II data
+- `GREEKS`: Options Greeks
+- And more...
+
+### Message Reference
+
+- `MESSAGESREFERENCE`: Message reference
+- `LOGON`: Logon
+- `LOGOFF`: Logoff
+- `LOGONGREETING`: Logon greeting
+- `NEWSHEADLINE`: News headline
+- `QUOTE`: Quote
+- `TRADE`: Trade
+- `BIDLEVELINSERT`: Bid level insert
+- `ASKLEVELINSERT`: Ask level insert
+- `BIDLEVELDELETE`: Bid level delete
+- `ASKLEVELDELETE`: Ask level delete
+- `BIDLEVELUPDATE`: Bid level update
+- `ASKLEVELUPDATE`: Ask level update
+- `INSTRUMENTRESET`: Instrument reset
+- And [more](https://packages.millistream.com/documents/MDF%20Messages%20Reference.pdf)...
+
+
+### Subscription Modes
+
+- `image`: Snapshot of current values
+- `stream`: Streaming data only
+- `full`: Both image and stream
+
+## Error Handling
+
+The wrapper provides a comprehensive exception hierarchy:
+
+```python
+from millistream_mdf import (
+    MDFError,
+    MDFConnectionError,
+    MDFAuthenticationError,
+    RequestClass
+)
+
+try:
+    with MDF(
+        url='sandbox.millistream.com',
+        port=9100,
+        username='sandbox',
+        password='sandbox'
+    ) as session:
+        for message in session.subscribe(request_classes=[RequestClass.QUOTE], instruments='*'):
+            print(message)
+
+except MDFConnectionError as e:
+    print(f"Connection failed: {e}")
+except MDFAuthenticationError as e:
+    print(f"Authentication failed: {e}")
+except MDFError as e:
+    print(f"MDF error: {e}")
+```
+
+### Exception Types
+
+- `MDFError`: Base exception for all MDF-related errors
+- `MDFConnectionError`: Connection failures
+- `MDFAuthenticationError`: Login failures
+- `MDFTimeoutError`: Timeout errors
+- `MDFMessageError`: Message operation failures
+- `MDFConfigurationError`: Invalid configuration
+- `MDFLibraryError`: Underlying library errors
+
+
+## Documentation
+
+For more detailed documentation, visit the [official documentation](https://packages.millistream.com/documents/) or the [millistream sandbox](https://sandbox.millistream.com/sandbox/mdf).
+
+
+## License
+
+This wrapper is provided under the LGPL v3 license, the same as the underlying libmdf library.
+
+## Support
+
+For issues with this Python wrapper:
+
+1. Check this documentation
+2. Check error messages and exception types
+3. [Open an issue](https://github.com/mint273/millistream-mdf/issues) on GitHub
+
+For *libmdf* library issues, refer to the official Millistream documentation or contact tech@millistream.com.
