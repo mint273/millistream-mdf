@@ -8,6 +8,7 @@ Usage: millistream-install-deps
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
@@ -26,46 +27,66 @@ def install_linux() -> None:
         f"Installing libmdf for [bold]Linux[/bold]...\n\n"
         f"This will automatically install the necessary dependency 'libmdf' using apt package manager."
     ))
-    
-    # Determine if we need sudo
+
     use_sudo = _needs_sudo()
     sudo_prefix = ["sudo"] if use_sudo else []
-    
+
     try:
-        # Step 1: Update package list and install prerequisites
+        # Step 1: Update and install prerequisites
         console.print("[bold]Step 1:[/bold] Updating package list and installing prerequisites...")
         subprocess.run([*sudo_prefix, "apt", "update"], check=True)
-        subprocess.run([*sudo_prefix, "apt", "install", "-y", "lsb-release", "wget", "gpg"], check=True)
-        
+        subprocess.run([*sudo_prefix, "apt", "install", "-y", "lsb-release", "wget", "gnupg"], check=True)
+
         # Step 2: Add Millistream repository
         console.print("[bold]Step 2:[/bold] Adding Millistream repository...")
-        
-        # Get the distribution codename
+
+        # Get Ubuntu codename
         result = subprocess.run(["lsb_release", "-cs"], capture_output=True, text=True, check=True)
         codename = result.stdout.strip()
-        
-        # Download and add the repository
-        repo_url = f"https://packages.millistream.com/apt/sources.list.d/{codename}.list"
-        subprocess.run([*sudo_prefix, "wget", repo_url, "-O", "/etc/apt/sources.list.d/millistream.list"], check=True)
-        
-        # Add the GPG key
+
+        repo_dir = Path("/etc/apt/sources.list.d")
+        repo_dir.mkdir(parents=True, exist_ok=True)
+
+        # Try .sources first, fallback to .list
+        urls_to_try = [
+            f"https://packages.millistream.com/apt/sources.list.d/{codename}.sources",
+            f"https://packages.millistream.com/apt/sources.list.d/{codename}.list"
+        ]
+
+        for url in urls_to_try:
+            try:
+                # Determine the correct file extension based on the URL
+                if url.endswith('.sources'):
+                    repo_file = repo_dir / f"millistream.sources"
+                else:
+                    repo_file = repo_dir / f"millistream.list"
+                
+                subprocess.run([*sudo_prefix, "wget", url, "-O", str(repo_file)], check=True)
+                console.print(f"[bold green]✔ Added repository from {url}[/bold green]")
+                break
+            except subprocess.CalledProcessError:
+                console.print(f"[yellow]⚠ Could not fetch {url}, trying next option...[/yellow]")
+        else:
+            raise RuntimeError("Could not download Millistream repository for your Ubuntu release.")
+
+        # Step 3: Add GPG key
         console.print("[bold]Step 3:[/bold] Adding GPG key...")
         gpg_cmd = 'wget -O- "https://packages.millistream.com/D2FCCE35.gpg" | gpg --dearmor | tee /usr/share/keyrings/millistream-archive-keyring.gpg > /dev/null'
         if use_sudo:
-            gpg_cmd = f'sudo sh -c \'{gpg_cmd}\''
+            gpg_cmd = f"sudo sh -c '{gpg_cmd}'"
         subprocess.run(gpg_cmd, shell=True, check=True)
-        
-        # Step 4: Install libmdf
+
+        # Step 4: Update and install libmdf
         console.print("[bold]Step 4:[/bold] Installing libmdf...")
         subprocess.run([*sudo_prefix, "apt", "update"], check=True)
         subprocess.run([*sudo_prefix, "apt", "install", "-y", "libmdf"], check=True)
-        
+
         console.print(Panel(
             f"[bold green]✅ Installation completed successfully![/bold green]\n\n"
             f"libmdf has been installed and is ready to use.\n\n"
             f"For more information, visit: [blue link=https://github.com/mint273/millistream-mdf]https://github.com/mint273/millistream-mdf[/blue link]"
         ))
-        
+
     except subprocess.CalledProcessError as e:
         console.print(Panel(
             f"[bold red]❌ Installation failed![/bold red]\n\n"
