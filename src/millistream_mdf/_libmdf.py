@@ -150,9 +150,12 @@ def _load_libmdf(max_attempts: int = 3) -> ctypes.CDLL:
         try:
             from .install_deps import main as install_main
             install_main()
+            sys.exit(0)
+        except SystemExit as e:
+            # Re-raise SystemExit from install_main as-is
+            raise
         except Exception as e:
             print(f"Installation failed: {e}")
-        finally:
             sys.exit(1)
     
     attempts = 0

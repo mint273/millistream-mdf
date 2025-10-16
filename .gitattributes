@@ -1,2 +1,3 @@
-# Exclude docs folder from GitHub releases
+# Exclude docs and tests folders from GitHub releases
 docs/ export-ignore
+tests/ export-ignore
