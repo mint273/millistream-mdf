@@ -31,11 +31,16 @@ from ._constants import (
     RequestClass,
     RequestType
 )
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = "0.1.11"
+try:
+    __version__ = version('millistream-mdf')
+except PackageNotFoundError:
+    __version__ = '0.0.0.dev0'
+
 __author__ = "Gustav Frison"
 __email__ = "gustav.frison@millistream.com"
 
 __all__ = [
-    'MDF', 'AsyncMDF', 'RequestType', 'RequestClass', 'MessageReference', 'Field', 'BatchItem', 'Message',
+    'MDF', 'AsyncMDF', 'RequestType', 'RequestClass', 'MessageReference', 'Field', 'Message',
 ]
