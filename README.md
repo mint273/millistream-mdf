@@ -458,7 +458,7 @@ with MDF(
             print('---')
 ```
 
-> **Tip:** You can use `'*'` for all available instruments.
+> **Tip:** You can use `'*'` for all available news agencies.
 
 > **Note:** [`RequestClass`](#request-classes) and [`MessageReference`](#message-reference) have overlapping names but serve different purposes and have different integer values.
 
