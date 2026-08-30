@@ -3,28 +3,23 @@ High-level Message class for representing MDF messages with enhanced typing.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, TypeVar, Sequence, Literal
-from datetime import date, time, datetime
-from .types import MessageProtocol, InstrumentSelection, MessageReference, FieldValue
-from ._mappings import FIELD_TYPES, FIELD_TO_NAME
-from ._constants import Field
+from datetime import date, datetime, time
+from functools import cached_property
+from typing import Any, Literal, Mapping, Sequence
 
-T = TypeVar('T')
-
-
-
-
+from ._mappings import FIELD_TO_NAME, FIELD_TYPES
+from .types import FieldValue, InstrumentSelection, MessageProtocol, MessageReference
 
 
 @dataclass
 class Message(MessageProtocol):
     """
     Represents a message received from the MDF server with enhanced typing.
-    
+
     Attributes:
-        reference: MREF code
+        ref: MREF code
         instrument: Instrument reference ID
-        fields: Dictionary of field_name: value pairs with typed access
+        fields: Dictionary of field_tag: value pairs (raw values)
         delay: Message delay type
     """
     ref: MessageReference
@@ -34,29 +29,75 @@ class Message(MessageProtocol):
 
     def get(self, field: int, default: Any = None) -> Any:
         """
-        Get field value by name.
-        
+        Get a field's raw value by field tag.
+
         Args:
-            field: Name of the field to retrieve
+            field: Field tag to retrieve (e.g. ``Field.TEXTBODY``)
             default: Default value if field not found
-            
+
         Returns:
-            Field value or default
+            Raw field value or default
         """
         return self.fields.get(field, default)
 
-    @property
-    def parsed_fields(self) -> dict[str, str | int | float | date | time | datetime | list[str]]:
+    def get_parsed(
+        self,
+        field: int,
+        default: Any = None,
+        *,
+        list_delimiter: str = ' ',
+        on_error: Literal['ignore', 'raise'] = 'ignore',
+    ) -> Any:
+        """
+        Get a single field's value converted to its mapped type.
+
+        Behaves like ``get``, but applies the same type conversion as
+        ``parse_fields`` to just this field.
+
+        Args:
+            field: Field tag to retrieve (e.g. ``Field.TEXTBODY``)
+            default: Value returned when the field is absent
+            list_delimiter: Delimiter to split list values on
+            on_error: 'ignore' returns the raw value when no type mapping
+                exists or conversion fails; 'raise' propagates instead
+
+        Returns:
+            The converted value, or ``default`` if the field is absent.
+        """
+        if field not in self.fields:
+            return default
+        value = self.fields[field]
+
+        # Field is an IntEnum, so plain-int lookups match enum-keyed dicts.
+        expected_type = FIELD_TYPES.get(field)
+        if expected_type is None:
+            if on_error == 'raise':
+                raise ValueError(f"No type mapping for field '{field}'!")
+            return value
+
+        try:
+            return self._convert(value, expected_type, list_delimiter)
+        except (ValueError, TypeError):
+            if on_error == 'raise':
+                raise
+            return value
+
+    @cached_property
+    def parsed_fields(self) -> dict[str | int, str | int | float | date | time | datetime | list[str]]:
         """
         Parse and convert field values to their proper types.
 
         Property for "parse_fields()" method using default parameters.
+
+        Note:
+            The result is computed once and cached; mutating ``fields``
+            after the first access leaves this property stale.
         """
         return self.parse_fields()
 
     def parse_fields(
-        self, 
-        remap_keys: bool = True, 
+        self,
+        remap_keys: bool = True,
         convert_types: Sequence[Literal['str', 'int', 'float', 'date', 'time', 'datetime', 'list']] = (
             'str', 'int', 'float', 'date', 'time', 'datetime', 'list'
         ),
@@ -65,35 +106,25 @@ class Message(MessageProtocol):
     ) -> dict[str | int, str | int | float | date | time | datetime | list[str]]:
         """
         Parse and convert field values to their proper types.
-        
+
         Args:
             remap_keys: If True, use lowercase field names as keys; else use field IDs
             convert_types: Which types to convert ('str', 'int', 'float', 'date', 'time', 'datetime', 'list')
             on_field_missing: How to handle unmapped fields ('raise', 'ignore', 'skip')
             list_delimiter: Delimiter to split list values on
-        
+
         Returns:
             Dictionary with converted values
         """
         result: dict[str | int, str | int | float | date | time | datetime | list[str]] = {}
         allowed_types = set(convert_types)
-        
+
         for field_id, value in self.fields.items():
-            # Get field key (string name or int ID)
-            if remap_keys:
-                try:
-                    key = FIELD_TO_NAME.get(Field(field_id), str(field_id))
-                except ValueError:
-                    key = str(field_id)
-            else:
-                key = field_id
-            
-            # Get expected type
-            try:
-                expected_type = FIELD_TYPES.get(Field(field_id))
-            except ValueError:
-                expected_type = None
-            
+            # Field is an IntEnum, so plain-int lookups match enum-keyed
+            # dicts; unknown tags simply miss instead of raising.
+            key = FIELD_TO_NAME.get(field_id, str(field_id)) if remap_keys else field_id
+            expected_type = FIELD_TYPES.get(field_id)
+
             # Handle missing type
             if expected_type is None:
                 if on_field_missing == 'raise':
@@ -103,14 +134,14 @@ class Message(MessageProtocol):
                 else:
                     result[key] = value
                     continue
-            
+
             # Check if we should convert this type
             type_name = expected_type.__name__ if expected_type in (str, int, float, date, time, datetime, list) else 'str'
-            
+
             if type_name not in allowed_types:
                 result[key] = value
                 continue
-            
+
             # Convert value
             try:
                 result[key] = self._convert(value, expected_type, list_delimiter)
@@ -118,15 +149,15 @@ class Message(MessageProtocol):
                 if on_field_missing == 'raise':
                     raise
                 result[key] = value
-        
+
         return result
-    
+
     @staticmethod
     def _convert(value: Any, target_type: type, list_delimiter: str = ' ') -> FieldValue:
         """Convert value to target type."""
         if value is None or isinstance(value, target_type):
             return value
-        
+
         if target_type == str:
             return str(value)
         elif target_type == int:
@@ -160,22 +191,21 @@ class Message(MessageProtocol):
                 return value.split(list_delimiter)
             return value
         return value
-    
+
     def __getitem__(self, field: int) -> Any:
         """Allow dict-like access to fields."""
         return self.fields[field]
-    
+
     def __contains__(self, field: int) -> bool:
         """Check if field exists in message."""
         return field in self.fields
-    
+
     def __str__(self) -> str:
         """String representation of the message."""
         field_str = ", ".join(f"{k}={v}" for k, v in self.fields.items())
-        return f"Message(reference='{self.reference}', instrument={self.instrument}, fields=[{field_str}])"
-    
+        return f"Message(ref='{self.ref}', instrument={self.instrument}, fields=[{field_str}])"
+
     def __repr__(self) -> str:
         """Detailed representation of the message."""
-        return (f"Message(reference='{self.reference}', instrument={self.instrument}, "
+        return (f"Message(ref='{self.ref}', instrument={self.instrument}, "
                 f"delay={self.delay}, fields={self.fields})")
-
