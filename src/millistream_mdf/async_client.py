@@ -98,12 +98,12 @@ class AsyncMDF:
         self._executor = executor
         self._loop: Optional[asyncio.AbstractEventLoop] = None
     
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'AsyncMDF':
         """Async context manager entry."""
         await self.connect()
         return self
     
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
         await self.disconnect()
     

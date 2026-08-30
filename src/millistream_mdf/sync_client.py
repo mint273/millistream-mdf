@@ -93,12 +93,12 @@ class MDF:
         self._connected = False
         self._authenticated = False
     
-    def __enter__(self):
+    def __enter__(self) -> 'MDF':
         """Context manager entry."""
         self.connect()
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit."""
         self.disconnect()
     
