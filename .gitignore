@@ -9,4 +9,9 @@ wheels/
 # Virtual environments
 .venv
 .DS_Store
+
+# Cache files
+.pytest_cache
+
+# Other
 c_source
