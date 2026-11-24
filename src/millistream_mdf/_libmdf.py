@@ -176,123 +176,144 @@ def _load_libmdf(max_attempts: int = 3) -> ctypes.CDLL:
             "or set 'LIBMDF_PATH' environment variable."
         )
 
-# Load the library
-_lib = _load_libmdf(max_attempts=3)
+def _configure(lib: ctypes.CDLL) -> ctypes.CDLL:
+    """Declare the C signatures on a freshly loaded libmdf."""
+    lib.mdf_create.restype = mdf_t
+    lib.mdf_create.argtypes = []
 
-# Function signatures
-_lib.mdf_create.restype = mdf_t
-_lib.mdf_create.argtypes = []
+    lib.mdf_destroy.restype = None
+    lib.mdf_destroy.argtypes = [mdf_t]
 
-_lib.mdf_destroy.restype = None
-_lib.mdf_destroy.argtypes = [mdf_t]
+    lib.mdf_connect.restype = c_int
+    lib.mdf_connect.argtypes = [mdf_t, c_char_p]
 
-_lib.mdf_connect.restype = c_int
-_lib.mdf_connect.argtypes = [mdf_t, c_char_p]
+    lib.mdf_disconnect.restype = None
+    lib.mdf_disconnect.argtypes = [mdf_t]
 
-_lib.mdf_disconnect.restype = None
-_lib.mdf_disconnect.argtypes = [mdf_t]
+    lib.mdf_extract.restype = c_void_p
+    lib.mdf_extract.argtypes = [mdf_t, ctypes.POINTER(c_uint16), ctypes.POINTER(c_uint64), ctypes.POINTER(c_size_t)]
 
-_lib.mdf_extract.restype = c_void_p
-_lib.mdf_extract.argtypes = [mdf_t, ctypes.POINTER(c_uint16), ctypes.POINTER(c_uint64), ctypes.POINTER(c_size_t)]
+    lib.mdf_inject.restype = c_int
+    lib.mdf_inject.argtypes = [mdf_t, c_void_p, c_size_t]
 
-_lib.mdf_inject.restype = c_int
-_lib.mdf_inject.argtypes = [mdf_t, c_void_p, c_size_t]
+    lib.mdf_consume.restype = c_int
+    lib.mdf_consume.argtypes = [mdf_t, c_int]
 
-_lib.mdf_consume.restype = c_int
-_lib.mdf_consume.argtypes = [mdf_t, c_int]
+    lib.mdf_get_next_message2.restype = c_int
+    lib.mdf_get_next_message2.argtypes = [mdf_t, ctypes.POINTER(c_uint16), ctypes.POINTER(c_uint64)]
 
-_lib.mdf_get_next_message2.restype = c_int
-_lib.mdf_get_next_message2.argtypes = [mdf_t, ctypes.POINTER(c_uint16), ctypes.POINTER(c_uint64)]
+    lib.mdf_get_mclass.restype = c_uint64
+    lib.mdf_get_mclass.argtypes = [mdf_t]
 
-_lib.mdf_get_mclass.restype = c_uint64
-_lib.mdf_get_mclass.argtypes = [mdf_t]
+    lib.mdf_get_delay.restype = ctypes.c_uint8
+    lib.mdf_get_delay.argtypes = [mdf_t]
 
-_lib.mdf_get_delay.restype = ctypes.c_uint8
-_lib.mdf_get_delay.argtypes = [mdf_t]
+    lib.mdf_get_next_field.restype = c_int
+    lib.mdf_get_next_field.argtypes = [mdf_t, ctypes.POINTER(c_uint32), ctypes.POINTER(c_char_p)]
 
-_lib.mdf_get_next_field.restype = c_int
-_lib.mdf_get_next_field.argtypes = [mdf_t, ctypes.POINTER(c_uint32), ctypes.POINTER(c_char_p)]
+    lib.mdf_get_property.restype = c_int
+    lib.mdf_get_property.argtypes = [mdf_t, c_int]
 
-_lib.mdf_get_property.restype = c_int
-_lib.mdf_get_property.argtypes = [mdf_t, c_int]
+    lib.mdf_set_property.restype = c_int
+    lib.mdf_set_property.argtypes = [mdf_t, c_int, c_void_p]
 
-_lib.mdf_set_property.restype = c_int
-_lib.mdf_set_property.argtypes = [mdf_t, c_int, c_void_p]
+    lib.mdf_message_create.restype = mdf_message_t
+    lib.mdf_message_create.argtypes = []
 
-_lib.mdf_message_create.restype = mdf_message_t
-_lib.mdf_message_create.argtypes = []
+    lib.mdf_message_destroy.restype = None
+    lib.mdf_message_destroy.argtypes = [mdf_message_t]
 
-_lib.mdf_message_destroy.restype = None
-_lib.mdf_message_destroy.argtypes = [mdf_message_t]
+    lib.mdf_message_add.restype = c_int
+    lib.mdf_message_add.argtypes = [mdf_message_t, c_uint64, c_int]
 
-_lib.mdf_message_add.restype = c_int
-_lib.mdf_message_add.argtypes = [mdf_message_t, c_uint64, c_int]
+    lib.mdf_message_add2.restype = c_int
+    lib.mdf_message_add2.argtypes = [mdf_message_t, c_uint64, c_uint16, ctypes.c_uint8]
 
-_lib.mdf_message_add2.restype = c_int
-_lib.mdf_message_add2.argtypes = [mdf_message_t, c_uint64, c_uint16, ctypes.c_uint8]
+    lib.mdf_message_del.restype = c_int
+    lib.mdf_message_del.argtypes = [mdf_message_t]
 
-_lib.mdf_message_del.restype = c_int
-_lib.mdf_message_del.argtypes = [mdf_message_t]
+    lib.mdf_message_reset.restype = None
+    lib.mdf_message_reset.argtypes = [mdf_message_t]
 
-_lib.mdf_message_reset.restype = None
-_lib.mdf_message_reset.argtypes = [mdf_message_t]
+    lib.mdf_message_serialize.restype = c_int
+    lib.mdf_message_serialize.argtypes = [mdf_message_t, ctypes.POINTER(c_char_p)]
 
-_lib.mdf_message_serialize.restype = c_int
-_lib.mdf_message_serialize.argtypes = [mdf_message_t, ctypes.POINTER(c_char_p)]
+    lib.mdf_message_deserialize.restype = c_int
+    lib.mdf_message_deserialize.argtypes = [mdf_message_t, c_char_p]
 
-_lib.mdf_message_deserialize.restype = c_int
-_lib.mdf_message_deserialize.argtypes = [mdf_message_t, c_char_p]
+    lib.mdf_message_add_list.restype = c_int
+    lib.mdf_message_add_list.argtypes = [mdf_message_t, c_uint32, c_char_p]
 
-_lib.mdf_message_add_list.restype = c_int
-_lib.mdf_message_add_list.argtypes = [mdf_message_t, c_uint32, c_char_p]
+    lib.mdf_message_add_numeric.restype = c_int
+    lib.mdf_message_add_numeric.argtypes = [mdf_message_t, c_uint32, c_char_p]
 
-_lib.mdf_message_add_numeric.restype = c_int
-_lib.mdf_message_add_numeric.argtypes = [mdf_message_t, c_uint32, c_char_p]
+    lib.mdf_message_add_string.restype = c_int
+    lib.mdf_message_add_string.argtypes = [mdf_message_t, c_uint32, c_char_p]
 
-_lib.mdf_message_add_string.restype = c_int
-_lib.mdf_message_add_string.argtypes = [mdf_message_t, c_uint32, c_char_p]
+    lib.mdf_message_add_int.restype = c_int
+    lib.mdf_message_add_int.argtypes = [mdf_message_t, c_uint32, c_longlong, c_int]
 
-_lib.mdf_message_add_int.restype = c_int
-_lib.mdf_message_add_int.argtypes = [mdf_message_t, c_uint32, c_longlong, c_int]
+    lib.mdf_message_add_uint.restype = c_int
+    lib.mdf_message_add_uint.argtypes = [mdf_message_t, c_uint32, c_uint64, c_int]
 
-_lib.mdf_message_add_uint.restype = c_int
-_lib.mdf_message_add_uint.argtypes = [mdf_message_t, c_uint32, c_uint64, c_int]
+    lib.mdf_message_add_string2.restype = c_int
+    lib.mdf_message_add_string2.argtypes = [mdf_message_t, c_uint32, c_char_p, c_size_t]
 
-_lib.mdf_message_add_string2.restype = c_int
-_lib.mdf_message_add_string2.argtypes = [mdf_message_t, c_uint32, c_char_p, c_size_t]
+    lib.mdf_message_add_date.restype = c_int
+    lib.mdf_message_add_date.argtypes = [mdf_message_t, c_uint32, c_char_p]
 
-_lib.mdf_message_add_date.restype = c_int
-_lib.mdf_message_add_date.argtypes = [mdf_message_t, c_uint32, c_char_p]
+    lib.mdf_message_add_date2.restype = c_int
+    lib.mdf_message_add_date2.argtypes = [mdf_message_t, c_uint32, c_int, c_int, c_int]
 
-_lib.mdf_message_add_date2.restype = c_int
-_lib.mdf_message_add_date2.argtypes = [mdf_message_t, c_uint32, c_int, c_int, c_int]
+    lib.mdf_message_add_time.restype = c_int
+    lib.mdf_message_add_time.argtypes = [mdf_message_t, c_uint32, c_char_p]
 
-_lib.mdf_message_add_time.restype = c_int
-_lib.mdf_message_add_time.argtypes = [mdf_message_t, c_uint32, c_char_p]
+    lib.mdf_message_add_time2.restype = c_int
+    lib.mdf_message_add_time2.argtypes = [mdf_message_t, c_uint32, c_int, c_int, c_int, c_int]
 
-_lib.mdf_message_add_time2.restype = c_int
-_lib.mdf_message_add_time2.argtypes = [mdf_message_t, c_uint32, c_int, c_int, c_int, c_int]
+    lib.mdf_message_add_time3.restype = c_int
+    lib.mdf_message_add_time3.argtypes = [mdf_message_t, c_uint32, c_int, c_int, c_int, c_int]
 
-_lib.mdf_message_add_time3.restype = c_int
-_lib.mdf_message_add_time3.argtypes = [mdf_message_t, c_uint32, c_int, c_int, c_int, c_int]
+    lib.mdf_message_get_num.restype = c_int
+    lib.mdf_message_get_num.argtypes = [mdf_message_t]
 
-_lib.mdf_message_get_num.restype = c_int
-_lib.mdf_message_get_num.argtypes = [mdf_message_t]
+    lib.mdf_message_get_num_active.restype = c_int
+    lib.mdf_message_get_num_active.argtypes = [mdf_message_t]
 
-_lib.mdf_message_get_num_active.restype = c_int
-_lib.mdf_message_get_num_active.argtypes = [mdf_message_t]
+    lib.mdf_message_get_num_fields.restype = c_int
+    lib.mdf_message_get_num_fields.argtypes = [mdf_message_t]
 
-_lib.mdf_message_get_num_fields.restype = c_int
-_lib.mdf_message_get_num_fields.argtypes = [mdf_message_t]
+    lib.mdf_message_move.restype = c_int
+    lib.mdf_message_move.argtypes = [mdf_message_t, mdf_message_t, c_uint64, c_uint64]
 
-_lib.mdf_message_move.restype = c_int
-_lib.mdf_message_move.argtypes = [mdf_message_t, mdf_message_t, c_uint64, c_uint64]
+    lib.mdf_message_send.restype = c_int
+    lib.mdf_message_send.argtypes = [mdf_t, mdf_message_t]
 
-_lib.mdf_message_send.restype = c_int
-_lib.mdf_message_send.argtypes = [mdf_t, mdf_message_t]
+    lib.mdf_message_set_property.restype = c_int
+    lib.mdf_message_set_property.argtypes = [mdf_message_t, c_int, c_int]
+    return lib
 
-_lib.mdf_message_set_property.restype = c_int
-_lib.mdf_message_set_property.argtypes = [mdf_message_t, c_int, c_int]
+
+class _LazyLib:
+    """Loads libmdf on first use, so the constants and helpers import without it."""
+
+    _loaded: Optional[ctypes.CDLL] = None
+
+    def load(self) -> ctypes.CDLL:
+        if self._loaded is None:
+            type(self)._loaded = _configure(_load_libmdf(max_attempts=3))
+        return self._loaded
+
+    def __getattr__(self, name: str):
+        return getattr(self.load(), name)
+
+
+_lib = _LazyLib()
+
+
+def load_libmdf() -> None:
+    """Load libmdf now (it otherwise loads on first use). Raises ImportError if it can't be found."""
+    _lib.load()
 
 
 # Enhanced function signatures with better return types
@@ -399,7 +420,7 @@ def mdf_get_next_field(handle: mdf_t) -> Tuple[bool, int, Optional[str]]:
     tag = c_uint32()
     value = c_char_p()
     result = _lib.mdf_get_next_field(handle, tag, value)
-    return bool(result), tag.value, value.value.decode('utf-8') if value.value is not None else None
+    return bool(result), tag.value, value.value.decode('utf-8', errors='replace') if value.value is not None else None
 
 
 @overload
@@ -446,7 +467,7 @@ def mdf_set_property(handle: mdf_t, option: int, value: Union[int, str, None]) -
     elif isinstance(value, str):
         return bool(_lib.mdf_set_property(handle, option, value.encode('utf-8')))
     else:
-        return bool(_lib.mdf_set_property(handle, option, ctypes.byref(c_int(value))))
+        return bool(_lib.mdf_set_property(handle, option, ctypes.byref(c_int(int(value)))))
 
 
 def mdf_message_create() -> mdf_message_t:

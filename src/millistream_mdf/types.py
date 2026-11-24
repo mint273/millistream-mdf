@@ -40,9 +40,9 @@ type FieldValue = FieldItem | list[FieldItem]
 @runtime_checkable
 class MessageProtocol(Protocol):
     """Protocol for message-like objects."""
-    reference: MessageReference
+    ref: MessageReference
     instrument: InstrumentSelection
-    fields: dict[str, FieldValue]
+    fields: dict[int, FieldValue]
     
     def get(self, field_name: str, default: FieldValue = None) -> FieldValue: ...
     def __getitem__(self, field_name: str) -> FieldValue: ...

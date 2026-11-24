@@ -174,8 +174,8 @@ The main client class for connecting to MDF servers.
 
 | Name                | Type            | Description                                      | Default    |
 |---------------------|-----------------|--------------------------------------------------|------------|
-| `url`               | `str`           | Server URL                                       |            |
-| `port`              | `int`           | Server port                                      | 9100       |
+| `url`               | `str`, `list[str]` | Server host or `host:port`; a list (or comma-separated string) is tried in order until one connects | |
+| `port`              | `int`           | Port for servers given without one               | 9100       |
 | `username`          | `str`           | Username for authentication                      |            |
 | `password`          | `str`           | Password for authentication                      |            |
 | `heartbeat_interval`| `int`, `float`  | Heartbeat interval in seconds                    | 30         |
@@ -193,6 +193,7 @@ All [constructor parameters](#constructor-parameters)
 |---------------------|-----------------|--------------------------------------------------|------------|
 | `is_connected`      | `bool`          | Whether the client is connected to the server    | False      |
 | `is_authenticated`  | `bool`          | Whether the client is authenticated to the server| False      |
+| `connected_host`    | `str`, `None`   | The `host:port` the session is connected to      | None       |
 
 #### Methods
 
@@ -600,6 +601,35 @@ with MDF(
 - `image`: Snapshot of current values
 - `stream`: Streaming data only
 - `full`: Both image and stream
+
+### Several requests, then one stream
+
+`request()` sends a request without starting to read, so you can send several and then
+read all replies with `stream()`. Request classes can be given as enum values, names
+(`'quote'`, `'MDF_RC_QUOTE'`) or numbers, or `'*'` for all. Pass `request_id` to get a
+`REQUESTFINISHED` message when the image part of a request is done.
+
+```python
+with MDF(url=['server1', 'server2:9100'], username='user', password='pass') as session:
+    session.request(['quote', 'basicdata'], '*', 'stream')
+    session.request([RequestClass.NEWSHEADLINE], [8195], 'full', request_id='news')
+    for message in session.stream():
+        print(session.connected_host, MessageReference.name_of(message.ref), message.instrument, message.mclass)
+```
+
+### Names and numbers
+
+The enums (`MessageReference`, `Field`, `RequestClass`, `RequestType`, `MessageClass`) have
+`parse()`, which takes a member, a number or a name (case-insensitive, C prefix optional), and
+`name_of()`, which gives the name for a number or the number as text when it's unknown:
+
+```python
+MessageReference.parse('mdf_m_quote')   # MessageReference.QUOTE
+Field.name_of(9999)                     # '9999'
+```
+
+The constants import without libmdf installed; the C library is loaded on first use
+(or call `load_libmdf()` to check it up front).
 
 ## Error Handling
 

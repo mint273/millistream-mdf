@@ -40,14 +40,59 @@ Note that MessageReference and RequestClass have overlapping names (e.g., both h
 QUOTE, TRADE, etc.) but serve different purposes and have different integer values.
 """
 
-from enum import IntEnum
+from enum import IntEnum, IntFlag
+
+
+_C_PREFIXES = {
+    'MessageReference': 'MDF_M_',
+    'Field': 'MDF_F_',
+    'RequestClass': 'MDF_RC_',
+    'RequestType': 'MDF_RT_',
+    'MessageClass': 'MDF_MC_',
+}
+
+
+class _Lookup:
+    """Name/number lookup shared by the MDF enums."""
+
+    @classmethod
+    def parse(cls, value):
+        """Return the member for a number, a name or a C name, case-insensitive.
+
+        ``MessageReference.parse('quote')``, ``parse('MDF_M_QUOTE')`` and ``parse(5)`` all give
+        ``MessageReference.QUOTE``. Raises ValueError for anything unknown.
+        """
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, int) and not isinstance(value, bool):
+            return cls(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if text.isdigit():
+                return cls(int(text))
+            name = text.upper()
+            prefix = _C_PREFIXES.get(cls.__name__, '')
+            if prefix and name.startswith(prefix):
+                name = name[len(prefix):]
+            member = cls.__members__.get(name)
+            if member is not None:
+                return member
+        raise ValueError(f"Unknown {cls.__name__}: {value!r}")
+
+    @classmethod
+    def name_of(cls, value, default=None):
+        """The member name for a number, or ``default`` (the number as a string if None) when unknown."""
+        try:
+            return cls(value).name
+        except ValueError:
+            return str(value) if default is None else default
 
 
 # =============================================================================
 # MESSAGE TYPE ENUMS (MREF)
 # =============================================================================
 
-class MessageReference(IntEnum):
+class MessageReference(_Lookup, IntEnum):
     """
     Message type identifiers (MDF_M_ in C API).
     
@@ -104,13 +149,15 @@ class MessageReference(IntEnum):
     GREEKS = 42
     QUOTEBBO = 43
     QUOTEEX = 44
+    EET = 45
+    TPT = 46
 
 
 # =============================================================================
 # FIELD ENUMS (TAG)
 # =============================================================================
 
-class Field(IntEnum):
+class Field(_Lookup, IntEnum):
     """
     Field identifiers (TAG).
     Values match libmdf C API field tag numbers.
@@ -1581,13 +1628,204 @@ class Field(IntEnum):
     PRIIP08180 = 2459
     PRIIP08190 = 2460
     PRIIP08200 = 2461
+    # Added from libmdf 1.0.30 (mdf_fields.h)
+    DIVIDENDORIGINAL = 101
+    ORDERINTAKE = 135
+    ORDERBACKLOG = 136
+    NETFEEANDCOMINCOME = 139
+    TOPERATINGEXPENSES = 140
+    TOPERATINGINCOME = 141
+    PROFITBEFOREWACL = 142
+    CREDITLOSS = 143
+    RENTALINCOME = 144
+    PROPERTYMGMTRESULT = 145
+    REALIZEDCHGPROP = 146
+    UNREALIZEDCHGPROP = 147
+    RETURNONEQUITY = 174
+    ADJUSTEDEQUITY = 190
+    PRICETOCASHFLOW = 191
+    PRICETOADJUSTEDEQUITY = 192
+    TOTLIABILITIES = 235
+    MIFID07101 = 677
+    MIFID08046 = 685
+    MIFID08085 = 686
+    MIFID11000 = 2462
+    MIFID11010 = 2463
+    MIFID11020 = 2464
+    FACTSHEET = 2465
+    SUPPLEMENT = 2466
+    ANNUALREPORT = 2467
+    SANNUALREPORT = 2468
+    ROFRPERIOD = 2469
+    TPT1 = 2470
+    TPT2 = 2471
+    TPT3 = 2472
+    TPT4 = 2473
+    TPT5 = 2474
+    TPT6 = 2475
+    TPT8 = 2476
+    TPT8B = 2477
+    TPT9 = 2478
+    TPT10 = 2479
+    TPT11 = 2480
+    TPT12 = 2481
+    TPT13 = 2482
+    TPT14 = 2483
+    TPT15 = 2484
+    TPT16 = 2485
+    TPT17 = 2486
+    TPT17B = 2487
+    TPT18 = 2488
+    TPT19 = 2489
+    TPT20 = 2490
+    TPT21 = 2491
+    TPT22 = 2492
+    TPT23 = 2493
+    TPT24 = 2494
+    TPT25 = 2495
+    TPT26 = 2496
+    TPT27 = 2497
+    TPT28 = 2498
+    TPT29 = 2499
+    TPT30 = 2500
+    TPT31 = 2501
+    TPT32 = 2502
+    TPT33 = 2503
+    TPT34 = 2504
+    TPT35 = 2505
+    TPT36 = 2506
+    TPT37 = 2507
+    TPT38 = 2508
+    TPT39 = 2509
+    TPT40 = 2510
+    TPT41 = 2511
+    TPT42 = 2512
+    TPT43 = 2513
+    TPT44 = 2514
+    TPT45 = 2515
+    TPT46 = 2516
+    TPT47 = 2517
+    TPT48 = 2518
+    TPT49 = 2519
+    TPT50 = 2520
+    TPT51 = 2521
+    TPT52 = 2522
+    TPT53 = 2523
+    TPT54 = 2524
+    TPT55 = 2525
+    TPT56 = 2526
+    TPT57 = 2527
+    TPT58 = 2528
+    TPT58B = 2529
+    TPT59 = 2530
+    TPT60 = 2531
+    TPT61 = 2532
+    TPT62 = 2533
+    TPT63 = 2534
+    TPT64 = 2535
+    TPT65 = 2536
+    TPT67 = 2537
+    TPT68 = 2538
+    TPT69 = 2539
+    TPT70 = 2540
+    TPT71 = 2541
+    TPT72 = 2542
+    TPT73 = 2543
+    TPT74 = 2544
+    TPT75 = 2545
+    TPT76 = 2546
+    TPT77 = 2547
+    TPT78 = 2548
+    TPT79 = 2549
+    TPT80 = 2550
+    TPT81 = 2551
+    TPT82 = 2552
+    TPT83 = 2553
+    TPT84 = 2554
+    TPT85 = 2555
+    TPT86 = 2556
+    TPT87 = 2557
+    TPT88 = 2558
+    TPT89 = 2559
+    TPT90 = 2560
+    TPT91 = 2561
+    TPT92 = 2562
+    TPT93 = 2563
+    TPT94 = 2564
+    TPT94B = 2565
+    TPT95 = 2566
+    TPT97 = 2567
+    TPT98 = 2568
+    TPT99 = 2569
+    TPT100 = 2570
+    TPT101 = 2571
+    TPT102 = 2572
+    TPT103 = 2573
+    TPT104 = 2574
+    TPT105 = 2575
+    TPT105A = 2576
+    TPT105B = 2577
+    TPT106 = 2578
+    TPT107 = 2579
+    TPT108 = 2580
+    TPT110 = 2581
+    TPT111 = 2582
+    TPT112 = 2583
+    TPT113 = 2584
+    TPT114 = 2585
+    TPT115 = 2586
+    TPT116 = 2587
+    TPT117 = 2588
+    TPT118 = 2589
+    TPT119 = 2590
+    TPT120 = 2591
+    TPT121 = 2592
+    TPT122 = 2593
+    TPT123 = 2594
+    TPT123A = 2595
+    TPT124 = 2596
+    TPT125 = 2597
+    TPT126 = 2598
+    TPT127 = 2599
+    TPT128 = 2600
+    TPT129 = 2601
+    TPT130 = 2602
+    TPT131 = 2603
+    TPT132 = 2604
+    TPT133 = 2605
+    TPT134 = 2606
+    TPT135 = 2607
+    TPT137 = 2608
+    TPT138 = 2609
+    TPT139 = 2610
+    TPT140 = 2611
+    TPT141 = 2612
+    TPT142 = 2613
+    TPT143 = 2614
+    TPT144 = 2615
+    TPT145 = 2616
+    TPT146 = 2617
+    TPT147 = 2618
+    TPT148 = 2619
+    TPT1000 = 2620
+    MINORDERVALUE = 2621
+    DIFF1HPRC = 2622
+    QUICKRATIO = 2623
+    SOLVENCYRATIO = 2624
+    EV_EBIT = 2625
+    EV_EBITDA = 2626
+    EARNINGSGROWTH = 2627
+    SALESGROWTH = 2628
+    TAXEXPENSE = 2629
+    OPERATINGCOST = 2630
+    C_I_RATIO = 2631
 
 
 # =============================================================================
 # REQUEST CLASS ENUMS
 # =============================================================================
 
-class RequestClass(IntEnum):
+class RequestClass(_Lookup, IntEnum):
     """
     Request class identifiers (MDF_RC_ in C API).
     
@@ -1642,13 +1880,55 @@ class RequestClass(IntEnum):
     GREEKS = 25
     QUOTEBBO = 26
     QUOTEEX = 27
+    EET = 28
+    TPT = 29
+
+
+# =============================================================================
+# MESSAGE CLASS FLAGS
+# =============================================================================
+
+class MessageClass(_Lookup, IntFlag):
+    """
+    Message class flags (MDF_MC_ in C API), as returned by ``mdf_get_mclass``.
+    A message can belong to several classes, so the values are bit flags.
+    """
+    UNDEF = 0
+    NEWSHEADLINE = 1
+    QUOTE = 2
+    TRADE = 4
+    ORDER = 8
+    BASICDATA = 16
+    PRICEHISTORY = 32
+    NEWSCONTENT = 64
+    CORPORATEACTION = 128
+    TRADESTATE = 256
+    FUNDAMENTALS = 512
+    PERFORMANCE = 1024
+    KEYRATIOS = 2048
+    ESTIMATES = 4096
+    ESTIMATESHISTORY = 8192
+    NETORDERIMBALANCE = 16384
+    L10N = 32768
+    CI = 65536
+    CIHISTORY = 131072
+    PRIIP = 262144
+    MIFID = 524288
+    MIFIDHISTORY = 1048576
+    MAPPINGS = 2097152
+    MBO = 4194304
+    GREEKS = 8388608
+    QUOTEBBO = 16777216
+    QUOTEEX = 33554432
+    EET = 67108864
+    TPT = 134217728
 
 
 # =============================================================================
 # REQUEST TYPE ENUMS
 # =============================================================================
 
-class RequestType(IntEnum):
+class RequestType(_Lookup, IntEnum):
     """
     Request type identifiers.
     Values match libmdf C API request type codes.
@@ -1656,6 +1936,8 @@ class RequestType(IntEnum):
     IMAGE = 1
     STREAM = 2
     FULL = 3
+    DELETES = 4
+    CONTINUE = 5
 
 
 # =============================================================================

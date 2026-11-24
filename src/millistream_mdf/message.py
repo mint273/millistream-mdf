@@ -21,11 +21,13 @@ class Message(MessageProtocol):
         instrument: Instrument reference ID
         fields: Dictionary of field_tag: value pairs (raw values)
         delay: Message delay type
+        mclass: Message class flags (``MessageClass``), 0 when unknown
     """
     ref: MessageReference
     instrument: InstrumentSelection
     fields: Mapping[int, FieldValue] = field(default_factory=dict)
     delay: int = 0
+    mclass: int = 0
 
     def get(self, field: int, default: Any = None) -> Any:
         """

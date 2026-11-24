@@ -18,6 +18,29 @@ SUB_TYPES = {
 }
 
 
+def server_address(url, port: int) -> str:
+    """libmdf's server string: 'host:port[,host:port…]', adding the default port where missing."""
+    if isinstance(url, str):
+        servers = url.split(',')
+    else:
+        servers = list(url)
+    parts = []
+    for server in servers:
+        server = server.strip()
+        if not server:
+            continue
+        # A bare IPv6 address has several colons; give it brackets before adding the port.
+        if server.startswith('[') or server.count(':') == 1:
+            parts.append(server if server.rsplit(':', 1)[-1].isdigit() and not server.endswith(']') else f"{server}:{port}")
+        elif ':' in server:
+            parts.append(f"[{server}]:{port}")
+        else:
+            parts.append(f"{server}:{port}")
+    if not parts:
+        raise ValueError("No MDF server given")
+    return ','.join(parts)
+
+
 # =============================================================================
 # FIELD NAME MAPPINGS
 # =============================================================================

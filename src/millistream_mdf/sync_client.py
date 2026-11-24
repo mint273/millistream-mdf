@@ -10,14 +10,14 @@ import os
 
 from ._libmdf import (
     mdf_create, mdf_destroy, mdf_connect, mdf_disconnect, mdf_consume,
-    mdf_get_next_message2, mdf_get_delay, mdf_get_next_field,
+    mdf_get_next_message2, mdf_get_delay, mdf_get_next_field, mdf_get_mclass,
     mdf_get_property, mdf_set_property, mdf_message_create, mdf_message_destroy,
     mdf_message_add, mdf_message_add_string, mdf_message_add_numeric, 
     mdf_message_add_list, mdf_message_send,
     MDF_OPTION, mdf_t
 )
-from ._constants import Field, RequestClass, MessageReference
-from ._mappings import SUB_TYPES
+from ._constants import Field, RequestClass, MessageReference, RequestType
+from ._mappings import SUB_TYPES, server_address
 from .types import BatchItem
 
 from .exceptions import (
@@ -53,7 +53,7 @@ class MDF:
     
     def __init__(
         self, 
-        url: str, 
+        url: str | Sequence[str], 
         port: int = 9100, 
         username: Optional[str] = None, 
         password: Optional[str] = None, 
@@ -66,7 +66,10 @@ class MDF:
         Initialize MDF client.
         
         Args:
-            url: Server URL
+            url: Server host, 'host:port', or a list of them (or a comma-separated string). With
+                several servers libmdf tries each in turn until one connects. 'port' is used
+                for entries that don't give their own.
+            port: Default port (default: 9100)
             username: Username for authentication
             password: Password for authentication
             heartbeat_interval: Heartbeat interval in seconds (default: 30)
@@ -89,6 +92,7 @@ class MDF:
         self.no_encryption = no_encryption
         
         # Internal state
+        self._pending: list[Message] = []
         self._handle: Optional[mdf_t] = None
         self._connected = False
         self._authenticated = False
@@ -123,8 +127,9 @@ class MDF:
             self._set_connection_options()
             
             # Connect to server
-            if not mdf_connect(self._handle, f"{self.url}:{self.port}"):
-                raise MDFConnectionError(f"Failed to connect to '{self.url}:{self.port}'")
+            address = server_address(self.url, self.port)
+            if not mdf_connect(self._handle, address):
+                raise MDFConnectionError(f"Failed to connect to '{address}'")
             
             self._connected = True
             
@@ -192,14 +197,33 @@ class MDF:
             RequestClass values specify what to subscribe to (e.g., RequestClass.QUOTE).
             Received messages will have MessageReference types (e.g., MessageReference.QUOTE).
         """
-        if not self._connected or not self._authenticated:
-            raise MDFError("Not connected or authenticated")
-        
-        # Send subscription request
-        self._send_subscription_request(request_classes, instruments, subscription_mode)
+        self.request(request_classes, instruments, subscription_mode)
 
         # Stream messages
         yield from self.stream(timeout, unsubscribe_on_exit)
+
+    def request(
+        self,
+        request_classes: Sequence[int] | Literal['*'],
+        instruments: Sequence[int] | Literal['*'] = '*',
+        subscription_mode: Literal['image', 'stream', 'full'] | int = 'full',
+        request_id: Optional[str] = None,
+    ) -> None:
+        """
+        Send a REQUEST without starting to stream, so several requests can be sent before
+        reading the replies with ``stream()``.
+
+        Args:
+            request_classes: RequestClass values (or names), or '*' for every class.
+            instruments: Instrument references, or '*' for all.
+            subscription_mode: 'image' (current state), 'stream' (changes from now on),
+                'full' (image, then stream), or a RequestType value.
+            request_id: Optional id; the server then sends a REQUESTFINISHED message carrying
+                it (Field.REQUESTID) when the image part of the request is done.
+        """
+        if not self._connected or not self._authenticated:
+            raise MDFError("Not connected or authenticated")
+        self._send_subscription_request(request_classes, instruments, subscription_mode, request_id)
     
     def unsubscribe(self, request_classes: Sequence[int] | Literal['*'] = '*', instruments: Sequence[int] | Literal['*'] = '*') -> None:
         """
@@ -375,6 +399,8 @@ class MDF:
             raise MDFError("Not connected!")
         
         try:
+            while self._pending:
+                yield self._pending.pop(0)
             while True:
                 try:
                     # Consume data from server
@@ -391,22 +417,7 @@ class MDF:
                             if not has_message:
                                 break
                             
-                            delay = mdf_get_delay(self._handle)
-                            
-                            # Collect all fields for this message
-                            fields: dict[int, Optional[str]] = {}
-                            while True:
-                                has_field, tag, value = mdf_get_next_field(self._handle)
-                                if not has_field:
-                                    break
-                                fields[tag] = value
-                            
-                            yield Message(
-                                ref=mref,
-                                instrument=instrument_id,
-                                fields=fields,
-                                delay=delay
-                            )
+                            yield self._read_message(mref, instrument_id)
                     
                     elif result == 0:  # Timeout
                         continue
@@ -421,6 +432,18 @@ class MDF:
             if unsubscribe_on_exit:
                 self.unsubscribe()
     
+    def _read_message(self, mref: int, instrument_id: int) -> Message:
+        """Read the fields of the current message."""
+        delay = mdf_get_delay(self._handle)
+        mclass = mdf_get_mclass(self._handle)
+        fields: dict[int, Optional[str]] = {}
+        while True:
+            has_field, tag, value = mdf_get_next_field(self._handle)
+            if not has_field:
+                break
+            fields[tag] = value
+        return Message(ref=mref, instrument=instrument_id, fields=fields, delay=delay, mclass=mclass)
+
     def _set_connection_options(self) -> None:
         """Set connection options on the MDF handle."""
         if self.heartbeat_interval:
@@ -471,19 +494,25 @@ class MDF:
                 raise_for_error(error_code, "Authentication failed!")
             
             if result == 1:  # Messages available
+                greeted = False
                 while True:
-                    has_message, mref, _ = mdf_get_next_message2(self._handle)
+                    has_message, mref, insref = mdf_get_next_message2(self._handle)
                     if not has_message:
                         break
                     
                     if mref == MessageReference.LOGONGREETING:
-                        return  # Success
+                        greeted = True
                     elif mref == MessageReference.LOGOFF:
                         raise MDFAuthenticationError("Server sent logoff during authentication!")
+                    else:
+                        # Keep what arrives with the greeting (e.g. MESSAGESREFERENCE); stream() yields it first.
+                        self._pending.append(self._read_message(mref, insref))
+                if greeted:
+                    return  # Success
         
         raise MDFTimeoutError("Authentication timeout")
     
-    def _send_subscription_request(self, request_classes: Sequence[RequestClass], instruments: Sequence[int] | Literal['*'], subscription_mode: Literal['image', 'stream', 'full']) -> None:
+    def _send_subscription_request(self, request_classes: Sequence[RequestClass] | Literal['*'], instruments: Sequence[int] | Literal['*'], subscription_mode: Literal['image', 'stream', 'full'] | int, request_id: Optional[str] = None) -> None:
         """Send subscription request message."""
         message = mdf_message_create()
         if not message:
@@ -492,14 +521,22 @@ class MDF:
         try:
             # Add request message
             mdf_message_add(message, 0, MessageReference.REQUEST)            
-            mdf_message_add_list(message, Field.REQUESTCLASS, ' '.join(str(mc) for mc in request_classes))
+            if request_classes == '*':
+                rc_str = '*'
+            else:
+                rc_str = ' '.join(str(int(RequestClass.parse(rc))) for rc in request_classes)
+            mdf_message_add_list(message, Field.REQUESTCLASS, rc_str)
             
             # Add subscription mode (request type)
-            if subscription_mode in SUB_TYPES:
+            if isinstance(subscription_mode, int):
+                request_type = RequestType(subscription_mode)
+            elif subscription_mode in SUB_TYPES:
                 request_type = SUB_TYPES[subscription_mode]
-                mdf_message_add_numeric(message, Field.REQUESTTYPE, str(request_type))
             else:
                 raise MDFMessageError(f"Unknown subscription mode: {subscription_mode}")
+            mdf_message_add_numeric(message, Field.REQUESTTYPE, str(int(request_type)))
+            if request_id is not None:
+                mdf_message_add_string(message, Field.REQUESTID, str(request_id))
             
             # Add instrument references
             insref_str = ' '.join(str(ref) for ref in instruments) if instruments != '*' else '*'
@@ -564,7 +601,15 @@ class MDF:
         
         self._connected = False
         self._authenticated = False
+        self._pending = []
     
+    @property
+    def connected_host(self) -> Optional[str]:
+        """The 'host:port' this session is connected to (useful with a server list)."""
+        if not self._handle:
+            return None
+        return mdf_get_property(self._handle, MDF_OPTION.CONNECTED_HOST)
+
     @property
     def is_connected(self) -> bool:
         """Check if connected to server."""
