@@ -10,14 +10,14 @@ import os
 
 from ._libmdf import (
     mdf_create, mdf_destroy, mdf_connect, mdf_disconnect, mdf_consume,
-    mdf_get_next_message2, mdf_get_delay, mdf_get_next_field,
+    mdf_get_next_message2, mdf_get_delay, mdf_get_next_field, mdf_get_mclass,
     mdf_get_property, mdf_set_property, mdf_message_create, mdf_message_destroy,
     mdf_message_add, mdf_message_add_string, mdf_message_add_numeric, 
     mdf_message_add_list, mdf_message_send,
     MDF_OPTION, mdf_t
 )
 from ._constants import MessageReference, RequestClass, Field
-from ._mappings import SUB_TYPES
+from ._mappings import SUB_TYPES, server_address
 from .types import BatchItem
 
 from .exceptions import (
@@ -50,7 +50,7 @@ class AsyncMDF:
     
     def __init__(
         self, 
-        url: str, 
+        url: str | Sequence[str], 
         port: int = 9100, 
         username: Optional[str] = None, 
         password: Optional[str] = None, 
@@ -130,11 +130,10 @@ class AsyncMDF:
             self._set_connection_options()
             
             # Connect to server (blocking operation)
-            success = await self._run_in_executor(
-                mdf_connect, self._handle, f"{self.url}:{self.port}"
-            )
+            address = server_address(self.url, self.port)
+            success = await self._run_in_executor(mdf_connect, self._handle, address)
             if not success:
-                raise MDFConnectionError(f"Failed to connect to '{self.url}:{self.port}'")
+                raise MDFConnectionError(f"Failed to connect to '{address}'")
             
             self._connected = True
             
@@ -407,6 +406,7 @@ class AsyncMDF:
                                 break
                             
                             delay = mdf_get_delay(self._handle)
+                            mclass = mdf_get_mclass(self._handle)
                             
                             # Collect all fields for this message
                             fields: dict[int, Optional[str]] = {}
@@ -420,7 +420,8 @@ class AsyncMDF:
                                 ref=mref,
                                 instrument=instrument_id,
                                 fields=fields,
-                                delay=delay
+                                delay=delay,
+                                mclass=mclass,
                             )
                     
                     elif result == 0:  # Timeout
@@ -513,7 +514,11 @@ class AsyncMDF:
         try:
             # Add request message
             mdf_message_add(message, 0, MessageReference.REQUEST)            
-            mdf_message_add_list(message, Field.REQUESTCLASS, ' '.join(str(mc) for mc in request_classes))
+            if request_classes == '*':
+                rc_str = '*'
+            else:
+                rc_str = ' '.join(str(int(RequestClass.parse(rc))) for rc in request_classes)
+            mdf_message_add_list(message, Field.REQUESTCLASS, rc_str)
             
             # Add subscription mode (request type)
             if subscription_mode in SUB_TYPES:
